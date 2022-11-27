@@ -40,24 +40,74 @@ class PrimeGroup {
 }
 
 //--- Secret Sharing functions ---
-async function shamirGenShares(secret, n, k, group) {
-	const pnomial = [secret]
-	for (let i = 0; i < n; i++) {
-		pnomial.push(getRandomMod(group.modulus))
-	} 
-}
-async function genPol(secret, n) {
-	const pnomial = [secret]
-	for (let i = 0; i < n; i++) {
-		pnomial.push(getRandomMod(group.modulus))
+function shamirCombineShares(shares, group) {
+	/**
+	 * Takes an array of indices and shares where the elements
+	 * are in the form [k, share #k]. Uses Lagrange interpolation
+	 * to combine the shares and returns the secret as a BigInteger.
+	 * * Does not check for n, t values! If not enough shares are
+	 * * given, simply returns a wrong value. Giving more than enough
+	 * * shares does not change the output.
+	 */
+	const bigInt = require('big-integer')
+	const n = shares.length
+
+	const at0 = bigInt(0)
+	for (const point of shares) {
+		const x = point[0]
+		const share_x = point[1]
+		let lambda_i = bigInt(1)
+		for (let j = 1; j <= n; j++) {
+			if (x = j) continue
+			const temp = bigInt(j).times(inverse(bigInt(j).subtract(i), group)).mod(group.modulus)
+			lambda_i = lambda_i.times(temp).mod(group.modulus)
+		}
+		at0 = at0.add(share_x.times(lambda_i).mod(group.modulus)).mod(group.modulus)
 	}
+	return at0
 }
-async function evalPol(pol, x, group) {
+
+function shamirGenShares(secret, n, t, group) {
+	/**
+	 * Takes a secret (that can be turned into bigInteger) and divides it into n shares
+	 * with t of them necessary and sufficient to reveal the secret.
+	 */
+	const bigInt = require('big-integer')
+	const pnomial = genPol(bigInt(secret), t, group)
+	const shares = []
+	for (let i = 1; i <= n; i++) {
+		shares.append([i, evalPol(pnomial, i, group)])
+	}
+	return shares
+}
+
+function genPol(secret, t, group) {
+	/**
+	 * Constructs a degree t-1 polynomial where
+	 * a_0 = secret
+	 * a_i = random for all 0<i<t
+	 * All elements are bigIntegers in the given group
+	 */
+	const pnomial = [secret]
+	for (let i = 0; i < t; i++) {
+		const pow = getRandomMod(group.order) // Random exponent
+		pnomial.push(group.generator.modPow(pow, group.modulus)) // Random group element, mod operation probably unnecessary
+	}
+	return pnomial
+}
+
+function evalPol(pol, x, group) {
+	/**
+	 * Evaluates the polynomial at x. Always stays in the group.
+	 * * Perhaps times().mod() can be more efficient by taking mod at each step.
+	 */
 	const bigInt = require('big-integer')
 	const sum = bigInt(0)
 	for(let i = 0; i < pol.length; i++) {
-		const x_i = pol[i].mulMod(x.modPow(i, group.modulus), group.modulus)
+		const x_i = pol[i].times(bigInt(x).modPow(i, group.modulus)).mod(group.modulus)
+		sum = sum.add(x_i).mod(group.modulus)
 	}
+	return sum
 }
 //--- Secret Sharing end ---
 
@@ -124,7 +174,15 @@ async function hash(str) {
 //--- Hash end ---
 
 //--- Some helpful functions ---
-async function getRandomMod(modulus) {
+function inverse(elm, group) {
+	/**
+	 * Returns the inverse of elm in group.
+	 * Employs the fact that elm^order = 1 so elm^(order-1) = elm^(-1)
+	 */
+	return bigInt(elm).modPow(group.order.subtract(1), group.modulus)
+}
+
+function getRandomMod(modulus) {
 	/**
 	 * Returns a random bigInt between 1 and modulus.
 	 * ! NOT PERFECTLY SECURE YET, BUT WORKS NICELY ENOUGH. NEED TO TAKE CARE OF BIASING.
