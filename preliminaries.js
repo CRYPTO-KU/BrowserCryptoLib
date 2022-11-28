@@ -1,10 +1,59 @@
 const DEBUG = true //! Keep this FALSE for release. It prints out secret values.
-const VERBOSE = true //! Keep this false as well.
+const VERBOSE = false //! Keep this false as well.
 /**
  * The functions accept and return values in base64 string format,
  * unless otherwise explicitly stated. This is to avoid confusion
  * while using them.
  */
+
+function main() {
+	// testShamir("19823769182637", 5, 3)
+	testGroup(10)
+}
+
+function testShamir(secret, n, t, it=1) {
+	// TODO: Time the tests.
+	print("Testing random polynomial and evaluation.")
+	const G = new PrimeGroup()
+	for (let i = 1; i <= it; i++) {
+		const secret = G.randomElement()
+		const pol = genPol("123456", 5, G)
+		if(VERBOSE) {
+			for (let i = 0; i < pol.length; i++) {
+				const term = pol[i].toStrig()
+				print(term + "x^" + i, newline=false)
+			}
+			print()
+		}
+
+	}
+	const shares = shamirGenShares(secret, n, t, G)
+	print("Generated shares:")
+	for (const share of shares)
+		print("\tShare #" + share[0].toString() + ": " + share[1].toString())
+	const reconst = shamirCombineShares(shares, G)
+	print("Secret reconstructed:")
+	print("\tOriginal secret: " + secret.toString())
+	print("\tReconstructed secret: " + reconst.toString())
+}
+
+function testGroup(it) {
+	// TODO: Time the tests.
+	const G = new PrimeGroup()
+	print("Testing invert operation randomly " + it + " times: ")
+	for (let i = 1; i <= it; i++) {
+		let x = G.randomElement()
+		let x_inv = G.inverse(x)
+		let e = x.times(x_inv).mod(G.modulus)
+		if (e == 1) continue
+		print("Inversion failed. e: " + e.toString())
+		if(VERBOSE) {
+			print("Random x: " + x.toString())
+			print("Calculated x inverse: " + x_inv.toString())
+		}
+	}
+	print("Inversion successful.")
+}
 
 class PrimeGroup {
 	// We work on a fixed group with generator 2.
@@ -37,6 +86,51 @@ class PrimeGroup {
 		this.generator = new bigInt(generator)
 		this.order = new bigInt(order)
 	}
+
+	inverse(elm) {
+		/**
+		 * Returns the inverse of elm in group.
+		 * Employs the fact that elm^order = 1 so elm^(order-1) = elm^(-1)
+		 */
+		return bigInt(elm).modPow(this.order.subtract(1), this.modulus)
+	}
+	
+	randomElement() {
+		/**
+		 * Returns a random element in the given group.
+		 * Employs getRandomMod.
+		 */
+		return this.generator.modPow(getRandomMod(this.order), this.modulus)
+	}
+	
+	randomExponent() {
+		/**
+		 * Returns a random bigInt between 1 and order.
+		 * ! NOT SECURE YET, BUT WORKS NICELY ENOUGH. NEED TO TAKE CARE OF BIASING.
+		 */
+		let Crypto
+		if (typeof require !== 'undefined' && require.main === module) {
+			Crypto = require('crypto')
+		} else {
+			Crypto = self.crypto
+		}
+		rnd = Crypto.getRandomValues(new Uint8Array(32)) // ArrayBuffer
+		rnd = Buffer.from(rnd).toString('hex') // Hex
+		return bigInt(rnd, 16).mod(this.order) // bigInt
+	}
+
+	mul(x, y) {
+		//* This can likely be made more efficient
+		return bigInt(x).times(y).mod(this.modulus)
+	}
+
+	add(x, y) {
+		return bigInt(x).add(y).mod(this.modulus)
+	}
+
+	subtract(x, y) {
+		return bigInt(x).subtract(y).mod(this.modulus)
+	}
 }
 
 //--- Secret Sharing functions ---
@@ -52,14 +146,14 @@ function shamirCombineShares(shares, group) {
 	const bigInt = require('big-integer')
 	const n = shares.length
 
-	const at0 = bigInt(0)
+	let at0 = bigInt(0)
 	for (const point of shares) {
 		const x = point[0]
 		const share_x = point[1]
 		let lambda_i = bigInt(1)
 		for (let j = 1; j <= n; j++) {
-			if (x = j) continue
-			const temp = bigInt(j).times(inverse(bigInt(j).subtract(i), group)).mod(group.modulus)
+			if (x == j) continue
+			const temp = bigInt(j).times(inverse(bigInt(j).subtract(x), group)).mod(group.modulus)
 			lambda_i = lambda_i.times(temp).mod(group.modulus)
 		}
 		at0 = at0.add(share_x.times(lambda_i).mod(group.modulus)).mod(group.modulus)
@@ -76,7 +170,7 @@ function shamirGenShares(secret, n, t, group) {
 	const pnomial = genPol(bigInt(secret), t, group)
 	const shares = []
 	for (let i = 1; i <= n; i++) {
-		shares.append([i, evalPol(pnomial, i, group)])
+		shares.push([i, evalPol(pnomial, i, group)])
 	}
 	return shares
 }
@@ -102,7 +196,7 @@ function evalPol(pol, x, group) {
 	 * * Perhaps times().mod() can be more efficient by taking mod at each step.
 	 */
 	const bigInt = require('big-integer')
-	const sum = bigInt(0)
+	let sum = bigInt(0)
 	for(let i = 0; i < pol.length; i++) {
 		const x_i = pol[i].times(bigInt(x).modPow(i, group.modulus)).mod(group.modulus)
 		sum = sum.add(x_i).mod(group.modulus)
@@ -137,9 +231,9 @@ async function oprfMask(secret, group) {
 	 * @returns [ro, alpha]
 	 */
 	const bigInt = require('big-integer')
-	const ro = await getRandomMod(group.order)
+	const ro = getRandomMod(group.order)
 	const Hp_x = await hashPrime(secret, group)
-	if(DEBUG) print("Hp_x: " + Hp_x.toString(16))
+	if(DEBUG) print("Hp_x: " + Hp_x)
 	const Hp_xToRo = bigInt(Hp_x, 16).modPow(ro, group.modulus)
 	return [ro, Hp_xToRo]
 }
@@ -149,7 +243,7 @@ async function oprfMask(secret, group) {
 async function hashPrime(str, group) {
 	/**
 	 * Hashes a string to an element in the given group.
-	 * Returns a promise resolving to the hash as a base64str.
+	 * Returns a promise resolving to the hash as a hex string.
 	 */
 	const bigInt = require('big-integer')
 	let baseHash = await hash(str) // Hex string
@@ -166,7 +260,13 @@ async function hash(str) {
 	 */
 	const enc = new TextEncoder()
 	const data = enc.encode(str)
-	let hash = await self.crypto.subtle.digest("SHA-256", data)
+	let Crypto
+	if (typeof require !== 'undefined' && require.main === module) {
+		Crypto = require('crypto')
+	} else {
+		Crypto = self.crypto
+	}
+	let hash = await Crypto.subtle.digest("SHA-256", data)
 	hash = Buffer.from(hash).toString("hex")
 	if(hash.length != 64) print("Error: Hash is not 256 bits: l= " + hash.length*4, color="red")
 	return hash
@@ -174,24 +274,6 @@ async function hash(str) {
 //--- Hash end ---
 
 //--- Some helpful functions ---
-function inverse(elm, group) {
-	/**
-	 * Returns the inverse of elm in group.
-	 * Employs the fact that elm^order = 1 so elm^(order-1) = elm^(-1)
-	 */
-	return bigInt(elm).modPow(group.order.subtract(1), group.modulus)
-}
-
-function getRandomMod(modulus) {
-	/**
-	 * Returns a random bigInt between 1 and modulus.
-	 * ! NOT PERFECTLY SECURE YET, BUT WORKS NICELY ENOUGH. NEED TO TAKE CARE OF BIASING.
-	 */
-	const bigInt = require('big-integer')
-	let rnd = self.crypto.getRandomValues(new Uint8Array(32)) // ArrayBuffer
-	rnd = Buffer.from(rnd).toString('hex') // Hex
-	return bigInt(rnd, 16).mod(modulus) // bigInt
-}
 
 function toArrayBuffer(buf) {
 	/**
@@ -221,3 +303,7 @@ function print(T='', newline=true, html=false, color="") {
 }
 //--- Helpful functions end ---
 
+// This check protects from imports running main().
+if (typeof require != 'undefined' && require.main == module) {
+    main();
+}
