@@ -1,7 +1,7 @@
 const { group } = require("console")
 const { BigInteger } = require("jsbn")
 
-const DEBUG = false //! Keep this FALSE for release. It prints out secret values.
+const DEBUG = true //! Keep this FALSE for release. It prints out secret values.
 const VERBOSE = false //! Keep this false as well.
 /**
  * The functions accept and return values in base64 string format,
@@ -12,11 +12,12 @@ const VERBOSE = false //! Keep this false as well.
 // --- TESTS ---
 
 function testAll(it=5) {
-	let x = new BigIntegerAdapter(1234)
-	let y = new BigIntegerAdapter(4321)
-	print(x.toString())
-	print(x.add(y).toString())
-	print(x.times(y).toString())
+	// let x = new BigIntegerAdapter(1234)
+	// let y = new BigIntegerAdapter(4321)
+	// y = new BigIntegerAdapter(y)
+	// print(x.toString())
+	// print(x.add(y).toString())
+	// print(x.times(y).toString())
 	const groupTest = testGroup(it)
 	const polTest = testPolynomials(it)
 	const shamirTest = testShamir(3, 2, it)
@@ -73,7 +74,7 @@ function testShamir(n, t, it=1) {
 			print("\tReconstructed secret: " + recons.toString())
 		}
 		console.timeEnd("Shamir test #"+i)
-		if (G.expEq(secret, recons)) continue
+		if (secret.eqMod(recons, G.order)) continue
 		print("Shamir's Secret Sharing tests failed at n=" + n*i + ", t=" + t*i + ".")
 		print("Secret:\n" + secret.toString())
 		print("Recons:\n" + recons.toString())
@@ -92,8 +93,8 @@ function testGroup(it) {
 	for (let i = 1; i <= it; i++) {
 		console.time("Group test #"+i)
 		let x = G.randomElement()
-		let x_inv = G.inverse(x)
-		let e = G.mul(x, x_inv)
+		let x_inv = x.invMod(G.modulus)
+		let e = x.mulMod(x_inv, G.modulus)
 		console.timeEnd("Group test #"+i)
 		if (e == 1) continue
 		print("Inversion failed. e: " + e.toString())
@@ -105,7 +106,7 @@ function testGroup(it) {
 		return false
 	}
 	console.timeEnd("Group tests")
-	if (DEBUG) print("Inversion successful.")
+	if (DEBUG) print("Group tests successful.")
 	return true
 }
 
@@ -121,21 +122,22 @@ function shamirCombineShares(shares, group) {
 	 * * given, simply returns a wrong value. Giving more than enough
 	 * * shares does not change the output.
 	 */
-	const bigInt = group.bigInt
 	const n = shares.length
-	let at0 = bigInt(0)
+	const mod = group.order
+	let at_0 = new BigIntegerAdapter(0)
 	for (const point of shares) {
 		const i = point[0] // int, not bigInt
 		const at_i = point[1]
-		let lambda_i = bigInt(1)
+		let lambda_i = new BigIntegerAdapter(1)
 		for (let j = 1; j <= n; j++) {
 			if (i == j) continue
-			const temp = group.expMul(j, bigInt(j-i).modInv(group.order)) // j/j-i
-			lambda_i = group.expMul(lambda_i, temp)
+			const inv = (new BigIntegerAdapter(j-i)).invMod(mod) // 1/j-i
+			const temp = inv.mulMod(j, mod) // j/j-i
+			lambda_i = lambda_i.mulMod(temp, mod)
 		}
-		at0 = group.expAdd(at0, group.expMul(at_i, lambda_i)) //! Legal only on exponents
+		at_0 = at_0.addMod(at_i.mulMod(lambda_i, mod), mod) //! Addition is legal only on exponents
 	}
-	return at0
+	return at_0
 }
 
 function shamirGenShares(secret, n, t, group) {
@@ -143,8 +145,7 @@ function shamirGenShares(secret, n, t, group) {
 	 * Takes a secret (that can be turned into bigInteger) and divides it into n shares
 	 * with t of them necessary and sufficient to reveal the secret.
 	 */
-	const bigInt = group.bigInt
-	const pnomial = genPol(bigInt(secret), t, group)
+	const pnomial = genPol(new BigIntegerAdapter(secret), t, group)
 	const shares = []
 	for (let i = 1; i <= n; i++) {
 		shares.push([i, evalPol(pnomial, i, group)])
@@ -172,10 +173,12 @@ function evalPol(pol, x, group) {
 	/**
 	 * Evaluates the polynomial at x in the exponents of the given group
 	 */
-	let sum = 0
+	x = new BigIntegerAdapter(x)
+	const mod = group.order
+	let sum = new BigIntegerAdapter(0)
 	for(let i = 0; i < pol.length; i++) {
-		const x_i = group.expMul(pol[i], group.expPow(x, i))
-		sum = group.expAdd(sum, x_i)
+		const x_i = pol[i].mulMod(x.powMod(i, mod), mod)
+		sum = sum.addMod(x_i, mod)
 	}
 	return sum
 }
@@ -301,56 +304,69 @@ class PrimeGroup {
 		let rnd = Crypto.getRandomValues(new Uint8Array(32)) // ArrayBuffer
 		rnd = Buffer.from(rnd).toString('hex') // Hex
 		// Transform to BigIntegerAdapter
-		return new BigIntegerAdapter(this.bigInt(rnd, 16)).mod(group.order)
+		rnd = new BigIntegerAdapter(rnd, 16)
+		return rnd.mod(this.order)
 	}
 	randomElement() {
 		/** Returns a random group element */
-		return this.generator.powMod(this.randomExponent(), group.modulus)
+		return this.generator.powMod(this.randomExponent(), this.modulus)
 	}
 }
 
 class BigIntegerAdapter {
 	constructor(value, radix=10) {
 		this.bigInt = require('big-integer')
-		this.value = this.bigInt(value, radix)
+		if (value instanceof BigIntegerAdapter) this.value = value.value
+		else this.value = this.bigInt(value, radix)
 	}
 	// Base calls
 	add(num) {
+		if (Number.isInteger(num)) num = new BigIntegerAdapter(num)
 		return new BigIntegerAdapter(this.value.add(num.value))
 	}
 	subtract(num) {
+		if (Number.isInteger(num)) num = new BigIntegerAdapter(num)
 		return new BigIntegerAdapter(this.value.subtract(num.value))
 	}
 	mul(num) {
+		if (Number.isInteger(num)) num = new BigIntegerAdapter(num)
 		return new BigIntegerAdapter(this.value.times(num.value))
 	}
 	times(num) {
 		return this.mul(num)
 	}
 	divide(num) {
+		if (Number.isInteger(num)) num = new BigIntegerAdapter(num)
 		return new BigIntegerAdapter(this.value.divide(num.value))
 	}
 	pow(num) {
+		if (Number.isInteger(num)) num = new BigIntegerAdapter(num)
 		return new BigIntegerAdapter(this.value.pow(num.value))
 	}
 	eq(num) {
+		if (Number.isInteger(num)) num = new BigIntegerAdapter(num)
 		return this.value.eq(num.value)
 	}
 	leq(num) {
-		return his.value.leq(num.value)
+		if (Number.isInteger(num)) num = new BigIntegerAdapter(num)
+		return this.value.leq(num.value)
 	}
 	geq(num) {
+		if (Number.isInteger(num)) num = new BigIntegerAdapter(num)
 		return this.value.geq(num.value)
 	}
 	lesser(num) {
+		if (Number.isInteger(num)) num = new BigIntegerAdapter(num)
 		return this.value.lesser(num.value)
 	}
 	greater(num) {
+		if (Number.isInteger(num)) num = new BigIntegerAdapter(num)
 		return this.value.greater(num.value)
 	}
 	// Mod calls, return positive
 	mod(mod) {
-		var result = new BigIntegerAdapter(this.value.mod(mod))
+		if (Number.isInteger(mod)) mod = new BigIntegerAdapter(mod)
+		var result = new BigIntegerAdapter(this.value.mod(mod.value))
 		return result.lesser(0) ? result.add(mod) : result
 	}
 	addMod(num, mod) {
@@ -363,15 +379,20 @@ class BigIntegerAdapter {
 		return this.mul(num).mod(mod)
 	}
 	powMod(num, mod) {
-		return this.pow(num).mod(mod)
+		if (Number.isInteger(num)) num = new BigIntegerAdapter(num)
+		if (Number.isInteger(mod)) mod = new BigIntegerAdapter(mod)
+		return new BigIntegerAdapter(this.value.modPow(num.value, mod.value))
 	}
 	eqMod(num, mod) {
-		x = this.mod(mod)
-		y = num.mod(mod)
-		return x.eq(y)
+		if (Number.isInteger(num)) num = new BigIntegerAdapter(num)
+		if (Number.isInteger(mod)) mod = new BigIntegerAdapter(mod)
+		let value = this.mod(mod)
+		num = num.mod(mod)
+		return value.eq(num)
 	}
 	invMod(mod) {
-		return new BigIntegerAdapter(this.value.modInv(mod))
+		if (Number.isInteger(mod)) mod = new BigIntegerAdapter(mod)
+		return new BigIntegerAdapter(this.value.modInv(mod.value))
 	}
 	// Other functionalities
 	toString(radix=10) {
