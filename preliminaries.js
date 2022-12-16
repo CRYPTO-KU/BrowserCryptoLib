@@ -1,4 +1,5 @@
 const { group } = require("console")
+const { BigInteger } = require("jsbn")
 
 const DEBUG = false //! Keep this FALSE for release. It prints out secret values.
 const VERBOSE = false //! Keep this false as well.
@@ -184,14 +185,15 @@ function evalPol(pol, x, group) {
 // These functions return big integers instead of base16 strings
 
 async function oprfResponse(beta, ro, group) {
-	return group.pow(beta, group.inverse(ro))
+	const mod = group.modulus
+	return beta.powMod(ro.invMod(mod), mod)
 }
 
 async function oprfChallenge(alpha, k, group) {
 	/**
 	 * Return beta = alpha^k mod p as a string.
 	 */
-	return group.pow(alpha, k)
+	return alpha.powMod(k, group.modulus)
 }
 	
 async function oprfMask(secret, group) {
@@ -204,11 +206,11 @@ async function oprfMask(secret, group) {
 	 * be used as an input to the reconstructPassword function.
 	 * @returns [ro, alpha]
 	 */
-	const bigInt = group.bigInt
 	const ro = group.randomElement()
 	const Hp_x = await hashPrime(secret, group)
 	if(DEBUG) print("Hp_x: " + Hp_x)
-	const Hp_xToRo = group.pow(bigInt(Hp_x, 16), ro) //TODO: Get group to accept bases
+	var Hp_xToRo = new BigIntegerAdapter(Hp_x, 16)
+	Hp_xToRo = Hp_xToRo.powMod(ro, group.modulus)
 	return [ro, Hp_xToRo]
 }
 //--- OPRF end ---
@@ -220,10 +222,12 @@ async function hashPrime(str, group) { //* Full domain hash, problem: Z_n*
 	 * Returns a promise resolving to the hash as a hex string.
 	 * This is not fixed sized output, though.
 	 */
-	const bigInt = group.bigInt
+	const g = group.generator
+	const mod = group.modulus
 	let baseHash = await hash(str) // Hex string
-	baseHash = bigInt(baseHash, 16).mod(group.order) // bigInt
-	let hp = group.pow(group.generator, baseHash) // bigInt
+	baseHash = new BigIntegerAdapter(baseHash, 16)
+	baseHash = baseHash.mod(group.order) // bigInt
+	let hp = g.powMod(baseHash, mod) // bigInt
 	hp = hp.toString(16) // Hex string
 	while(hp.length < 32) hp = "0" + hp // Converstion to string may reduce size only when there are 0s on the left side
 	return hp
@@ -254,10 +258,9 @@ class PrimeGroup {
 	// ! Hardcoding may be problematic for any sort of production code.
 	// TODO: Reduce the size of this group
 	constructor(modulus=0, generator=0, order=0) {
-		const bigInt = require("big-integer")
 		if(modulus==0) { //* Order 256-bit (or 512-bit)
 			// https://datatracker.ietf.org/doc/rfc3526/ | Group id 15
-			modulus = new bigInt( // prime modulus
+			modulus = new BigIntegerAdapter( // prime modulus
 				"FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD1"+
 				"29024E088A67CC74020BBEA63B139B22514A08798E3404DD"+
 				"EF9519B3CD3A431B302B0A6DF25F14374FE1356D6D51C245"+
@@ -275,45 +278,20 @@ class PrimeGroup {
 				"BBE117577A615D6C770988C0BAD946E208E24FA074E5AB31"+
 				"43DB5BFCE0FD108E4B82D120A93AD2CAFFFFFFFFFFFFFFFF", 16)
 			order = modulus.subtract(1).divide(2) // order of generator
-			generator = new bigInt(2) // generator = 2
-			//modulus = bigInt(23)
-			//order = bigInt(11)
+			generator = new BigIntegerAdapter(2) // generator = 2
+			//modulus = new BigIntegerAdapter(23)
+			//order = new BigIntegerAdapter(11)
 		}
-		this.modulus = new bigInt(modulus)
-		this.generator = new bigInt(generator)
-		this.order = new bigInt(order)
-		this.bigInt = bigInt // This allows for easier alteration of bigInt library.
+		this.modulus = new BigIntegerAdapter(modulus)
+		this.generator = new BigIntegerAdapter(generator)
+		this.order = new BigIntegerAdapter(order)
 	}
-
-	inverse(elm) {
-		/**
-		 * Returns the inverse of elm in group.
-		 * Employs the fact that elm^order = 1 so elm^(order-1) = elm^(-1)
-		 */
-		return this.pow(this.bigInt(elm), this.expSubtract(this.order, 1))
-	}
-
-	expInverse(exp) { //! BUG
-		/**
-		 * Returns the inverse of exponent, so that:
-		 * g^{exp} * g^{exp^-1} = g
-		 */
-		return this.pow(this.bigInt(exp), this.expSubtract(this.order, 2))
-	}
-	
-	randomElement() {
-		/**
-		 * Returns a random element in the given group.
-		 * Employs getRandomMod.
-		 */
-		return this.pow(this.generator, this.randomExponent())
-	}
-	
 	randomExponent() {
 		/**
 		 * Returns a random bigInt between 1 and order.
 		 * ! NOT SECURE YET, BUT WORKS NICELY ENOUGH. NEED TO TAKE CARE OF BIASING.
 		 */
+		// Get a random number
 		let Crypto
 		if (typeof require !== 'undefined' && require.main === module) {
 			Crypto = require('crypto')
@@ -322,75 +300,19 @@ class PrimeGroup {
 		}
 		let rnd = Crypto.getRandomValues(new Uint8Array(32)) // ArrayBuffer
 		rnd = Buffer.from(rnd).toString('hex') // Hex
-		return this.bigInt(rnd, 16).mod(this.order) // bigInt
+		// Transform to BigIntegerAdapter
+		return new BigIntegerAdapter(this.bigInt(rnd, 16)).mod(group.order)
 	}
-	mul(x, y) { // TODO: Check the efficiency here
-		return this.bigInt(x).times(this.bigInt(y)).mod(this.modulus)
-	}
-
-	expMul(x, y) { // TODO: Check the efficiency here
-		return this.bigInt(x).times(this.bigInt(y)).mod(this.order)
-	}
-
-	add(x, y) {  //! This group is not additive, be careful
-		if(DEBUG) print("You are adding elements in a multiplicative group, are you sure?")
-		return this.bigInt(x).add(this.bigInt(y)).mod(this.modulus)
-	}
-
-	subtract(x, y) { //! This group is not additive, be careful
-		if(DEBUG) print("You are subtracting elements in a multiplicative group, are you sure?")
-		var cand = this.bigInt(x).subtract(this.bigInt(y)).mod(this.modulus)
-		return cand.leq(0) ? cand.add(this.modulus) : cand
-	}
-
-	expAdd(x, y) {
-		return this.bigInt(x).add(this.bigInt(y)).mod(this.order)
-	}
-
-	expSubtract(x, y) {
-		var cand = this.bigInt(x).subtract(this.bigInt(y)).mod(this.order)
-		return cand.leq(0) ? cand.add(this.order) : cand
-	}
-
-	pow(x, y) { // TODO: Check the efficiency here
-		return this.bigInt(x).modPow(this.bigInt(y), this.modulus)
-	}
-
-	expPow(x, y) { // TODO: Check the efficiency here
-		return this.bigInt(x).modPow(this.bigInt(y), this.order)
-	}
-
-	eq(x, y) {
-		// TODO: Check whether elements always map into groups
-		// TODO: Add a map-into-group call
-		const bigInt = this.bigInt
-		// Mod into group
-		var temp_x = bigInt(x).mod(this.modulus)
-		var temp_y = bigInt(y).mod(this.modulus)
-		// Check positivity
-		temp_x = temp_x.leq(0) ? temp_x.add(this.modulus) : temp_x
-		temp_y = temp_y.leq(0) ? temp_y.add(this.modulus) : temp_y
-		return temp_y.eq(temp_x)
-	}
-
-	expEq(x, y) {
-		// TODO: Check whether elements always map into groups
-		// TODO: Add a map-into-group call
-		const bigInt = this.bigInt
-		// Mod into group
-		var temp_x = bigInt(x).mod(this.order)
-		var temp_y = bigInt(y).mod(this.order)
-		// Check positivity
-		temp_x = temp_x.leq(0) ? temp_x.add(this.order) : temp_x
-		temp_y = temp_y.leq(0) ? temp_y.add(this.order) : temp_y
-		return temp_y.eq(temp_x)
+	randomElement() {
+		/** Returns a random group element */
+		return this.generator.powMod(this.randomExponent(), group.modulus)
 	}
 }
 
 class BigIntegerAdapter {
-	constructor(value) {
+	constructor(value, radix=10) {
 		this.bigInt = require('big-integer')
-		this.value = this.bigInt(value)
+		this.value = this.bigInt(value, radix)
 	}
 	// Base calls
 	add(num) {
@@ -404,6 +326,9 @@ class BigIntegerAdapter {
 	}
 	times(num) {
 		return this.mul(num)
+	}
+	divide(num) {
+		return new BigIntegerAdapter(this.value.divide(num.value))
 	}
 	pow(num) {
 		return new BigIntegerAdapter(this.value.pow(num.value))
@@ -449,9 +374,10 @@ class BigIntegerAdapter {
 		return new BigIntegerAdapter(this.value.modInv(mod))
 	}
 	// Other functionalities
-	toString() {
-		return this.value.toString()
+	toString(radix=10) {
+		return this.value.toString(radix)
 	}
+
 }
 
 function toArrayBuffer(buf) {
