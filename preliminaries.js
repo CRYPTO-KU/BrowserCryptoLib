@@ -20,7 +20,8 @@ function testAll(it=5) {
 	// print(x.times(y).toString())
 	const groupTest = testGroup(it)
 	const polTest = testPolynomials(it)
-	const shamirTest = testShamir(3, 2, it)
+	const baseShamirTest = testShamir(3, 2, it, false)
+	const exponentShamirTest = testShamir(3, 2, it, true)
 }
 
 function testPolynomials(it) {
@@ -54,28 +55,29 @@ function testPolynomials(it) {
 	return true
 }
 
-function testShamir(n, t, it=1) {
+function testShamir(n, t, it=1, exponent=false) {
 	const G = new PrimeGroup()
-	if (DEBUG) print("Testing Shamir's Secret Sharing.")
+	if (DEBUG) print("Testing Shamir's Secret Sharing on " + (exponent ? "exponent" : "base"))
 	console.time("Shamir tests")
 	for (let i = 1; i <= it; i++) {
 		console.time("Shamir test #"+i)
-		const secret = G.randomExponent()
-		const shares = shamirGenShares(secret, n*i, t*i, G)
+		const secret = exponent ? G.randomElement() : G.randomExponent()
+		const shares = shamirGenShares(secret, n*i, t*i, G, exponent)
 		if (VERBOSE) {
 			print("Generated shares:")
 			for (const share of shares)
 				print("\tShare #" + share[0] + ": " + share[1].toString())
 		}
-		const recons = shamirCombineShares(shares.slice(0, t*i), G)
+		const recons = shamirCombineShares(shares.slice(0, t*i), G, exponent)
 		if (VERBOSE) {
 			print("Secret reconstructed:")
 			print("\tOriginal secret: " + secret.toString())
 			print("\tReconstructed secret: " + recons.toString())
 		}
 		console.timeEnd("Shamir test #"+i)
-		if (secret.eqMod(recons, G.order)) continue
-		print("Shamir's Secret Sharing tests failed at n=" + n*i + ", t=" + t*i + ".")
+		const mod = exponent ? G.modulus : G.order
+		if (secret.eqMod(recons, mod)) continue
+		print("Shamir's Secret Sharing tests failed at n=" + n*i + ", t=" + t*i + ", on " + (exponent ? "exponent" : "base"))
 		print("Secret:\n" + secret.toString())
 		print("Recons:\n" + recons.toString())
 		console.timeEnd("Shamir tests")
@@ -113,7 +115,7 @@ function testGroup(it) {
 //--- Tests end ---
 
 //--- Secret Sharing functions ---
-function shamirCombineShares(shares, group) {
+function shamirCombineShares(shares, group, exponent=false) {
 	/**
 	 * Takes an array of indices and shares where the elements
 	 * are in the form [k, share #k]. Uses Lagrange interpolation
@@ -123,29 +125,31 @@ function shamirCombineShares(shares, group) {
 	 * * shares does not change the output.
 	 */
 	const n = shares.length
-	const mod = group.order
-	let at_0 = new BigIntegerAdapter(0)
+	const mod = group.modulus
+	const ord = group.order
+	let at_0 = exponent ? new BigIntegerAdapter(1) : new BigIntegerAdapter(0)
 	for (const point of shares) {
 		const i = point[0] // int, not bigInt
 		const at_i = point[1]
 		let lambda_i = new BigIntegerAdapter(1)
 		for (let j = 1; j <= n; j++) {
 			if (i == j) continue
-			const inv = (new BigIntegerAdapter(j-i)).invMod(mod) // 1/j-i
-			const temp = inv.mulMod(j, mod) // j/j-i
-			lambda_i = lambda_i.mulMod(temp, mod)
+			const inv = (new BigIntegerAdapter(j-i)).invMod(ord) // 1/j-i
+			const temp = inv.mulMod(j, ord) // j/j-i
+			lambda_i = lambda_i.mulMod(temp, ord)
 		}
-		at_0 = at_0.addMod(at_i.mulMod(lambda_i, mod), mod) //! Addition is legal only on exponents
+		if (exponent) at_0 = at_0.mulMod(at_i.powMod(lambda_i, mod), mod)
+		else at_0 = at_0.addMod(at_i.mulMod(lambda_i, ord), ord) //! Addition is legal only on exponents
 	}
 	return at_0
 }
 
-function shamirGenShares(secret, n, t, group) {
+function shamirGenShares(secret, n, t, group, exponent=false) {
 	/**
 	 * Takes a secret (that can be turned into bigInteger) and divides it into n shares
 	 * with t of them necessary and sufficient to reveal the secret.
 	 */
-	const pnomial = genPol(new BigIntegerAdapter(secret), t, group)
+	const pnomial = genPol(new BigIntegerAdapter(secret), t, group, exponent)
 	const shares = []
 	for (let i = 1; i <= n; i++) {
 		shares.push([i, evalPol(pnomial, i, group)])
@@ -153,28 +157,27 @@ function shamirGenShares(secret, n, t, group) {
 	return shares
 }
 
-function genPol(secret, t, group) {
+function genPol(secret, t, group, exponent=false) {
 	/**
 	 * Constructs a degree t-1 polynomial where
 	 * a_0 = secret, needs to be in the exponent range
 	 * a_i = random for all 0<i<t
 	 * All elements are exponents in the given group represented as bigIntegers
 	 */
-	if (group.order.leq(secret)) //? This really should not be the case. Maybe throw instead?
-		secret = secret.mod(group.order) //? Care about negatives?
 	const pnomial = [secret]
 	for (let i = 1; i < t; i++) {
-		pnomial.push(group.randomExponent())
+		const rand = exponent ? group.randomElement() : group.randomExponent()
+		pnomial.push(rand)
 	}
 	return pnomial
 }
 
-function evalPol(pol, x, group) {
+function evalPol(pol, x, group, exponent=false) {
 	/**
 	 * Evaluates the polynomial at x in the exponents of the given group
 	 */
 	x = new BigIntegerAdapter(x)
-	const mod = group.order
+	const mod = exponent ? group.modulus : group.order
 	let sum = new BigIntegerAdapter(0)
 	for(let i = 0; i < pol.length; i++) {
 		const x_i = pol[i].mulMod(x.powMod(i, mod), mod)
