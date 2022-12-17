@@ -1,30 +1,42 @@
 const { group } = require("console")
+const { truncate } = require("fs")
 const { BigInteger } = require("jsbn")
 
-const DEBUG = true //! Keep this FALSE for release. It prints out secret values.
+const DEBUG = false //! Keep this FALSE for release. It prints out secret values.
 const VERBOSE = false //! Keep this false as well.
-/**
- * The functions accept and return values in base64 string format,
- * unless otherwise explicitly stated. This is to avoid confusion
- * while using them.
- */
 
 // --- TESTS ---
 
 function testAll(it=5) {
-	// let x = new BigIntegerAdapter(1234)
-	// let y = new BigIntegerAdapter(4321)
-	// y = new BigIntegerAdapter(y)
-	// print(x.toString())
-	// print(x.add(y).toString())
-	// print(x.times(y).toString())
 	const groupTest = testGroup(it)
 	const polTest = testPolynomials(it)
 	const baseShamirTest = testShamir(3, 2, it, false)
 	const exponentShamirTest = testShamir(3, 2, it, true)
+	const OPRFTest = testOPRF("Meaning of life")
 }
 
-function testShamir(n, t, it=1, exponent=false) {
+async function testOPRF(secret, exponent=false) {
+	const G = new PrimeGroup()
+	console.time((exponent ? "t-" : "") + "OPRF test")
+	var Hp_x = await hashPrime(secret, G)
+	Hp_x = new BigIntegerAdapter(Hp_x, 16)
+	const [ro, alpha] = await oprfMask(secret, G)
+	const k = G.randomExponent()
+	const beta = await oprfChallenge(alpha, k, G)
+	const resp = await oprfResponse(beta, ro, G)
+	check = Hp_x.powMod(k, G.modulus).eqMod(resp, G.modulus)
+	if (DEBUG) {
+		print(`ro: ${ro.toString()} \t`)
+		print(`alpha: ${alpha.toString()} \t`)
+		print(`beta: ${beta.toString()} \t`)
+		print(`resp: ${resp.toString()} \t`)
+	}
+	console.timeEnd((exponent ? "t-" : "") + "OPRF test")
+	print((exponent ? "t-" : "") + "OPRF test " + (check ? "successful." : "failed."))
+	return check
+}
+
+function testShamir(n, t, it, exponent=false) {
 	const G = new PrimeGroup()
 	const modulus = G.modulus
 	const order = G.order
@@ -197,11 +209,12 @@ function evalPol(pol, x, group) {
 //--- Secret Sharing end ---
 
 //--- OPRF functions ---
-// These functions return big integers instead of base16 strings
 
 async function oprfResponse(beta, ro, group) {
-	const mod = group.modulus
-	return beta.powMod(ro.invMod(mod), mod)
+	/**
+	 * Return beta^(ro^-1) = alpha^(k*(ro^-1)) = Hp_x^(ro*k*(ro^-1)) = Hp_x^k
+	 */
+	return beta.powMod(ro.invMod(group.order), group.modulus)
 }
 
 async function oprfChallenge(alpha, k, group) {
@@ -223,7 +236,7 @@ async function oprfMask(secret, group) {
 	 */
 	const ro = group.randomElement()
 	const Hp_x = await hashPrime(secret, group)
-	if(DEBUG) print("Hp_x: " + Hp_x)
+	if(VERBOSE) print("Hp_x: " + Hp_x)
 	var Hp_xToRo = new BigIntegerAdapter(Hp_x, 16)
 	Hp_xToRo = Hp_xToRo.powMod(ro, group.modulus)
 	return [ro, Hp_xToRo]
@@ -294,8 +307,8 @@ class PrimeGroup {
 				"43DB5BFCE0FD108E4B82D120A93AD2CAFFFFFFFFFFFFFFFF", 16)
 			order = modulus.subtract(1).divide(2) // order of generator
 			generator = new BigIntegerAdapter(2) // generator = 2
-			//modulus = new BigIntegerAdapter(23)
-			//order = new BigIntegerAdapter(11)
+			// modulus = new BigIntegerAdapter(23)
+			// order = new BigIntegerAdapter(11)
 		}
 		this.modulus = new BigIntegerAdapter(modulus)
 		this.generator = new BigIntegerAdapter(generator)
@@ -441,7 +454,7 @@ function print(T='', newline=true, html=false, color="") {
 }
 //--- Helpful functions end ---
 
-// This check protects from imports running main().
+// This check protects importing scripts from running main().
 if (typeof require != 'undefined' && require.main == module) {
     testAll();
 }
