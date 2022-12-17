@@ -57,16 +57,25 @@ function testPolynomials(it) {
 
 function testShamir(n, t, it=1, exponent=false) {
 	const G = new PrimeGroup()
+	const modulus = G.modulus
+	const order = G.order
 	if (DEBUG) print("Testing Shamir's Secret Sharing on " + (exponent ? "exponent" : "base"))
 	console.time("Shamir tests")
 	for (let i = 1; i <= it; i++) {
-		console.time("Shamir test #"+i)
-		const secret = exponent ? G.randomElement() : G.randomExponent()
-		const shares = shamirGenShares(secret, n*i, t*i, G, exponent)
+		console.time("Test #" + i + ": n=" + n*i + ", t=" + t*i)
+		const secret = G.randomExponent()
+		const shares = shamirGenShares(secret, n*i, t*i, G)
 		if (VERBOSE) {
 			print("Generated shares:")
 			for (const share of shares)
 				print("\tShare #" + share[0] + ": " + share[1].toString())
+		}
+		if (exponent) {
+			let elm = G.randomElement()
+			var secret_elm = elm.powMod(secret, modulus)
+			for (var share of shares) 
+				share[1] = elm.powMod(share[1], modulus)
+			
 		}
 		const recons = shamirCombineShares(shares.slice(0, t*i), G, exponent)
 		if (VERBOSE) {
@@ -74,9 +83,9 @@ function testShamir(n, t, it=1, exponent=false) {
 			print("\tOriginal secret: " + secret.toString())
 			print("\tReconstructed secret: " + recons.toString())
 		}
-		console.timeEnd("Shamir test #"+i)
-		const mod = exponent ? G.modulus : G.order
-		if (secret.eqMod(recons, mod)) continue
+		console.timeEnd("Test #" + i + ": n=" + n*i + ", t=" + t*i)
+		var check = exponent ? secret_elm.eqMod(recons, modulus) : secret.eqMod(recons, order)
+		if (check) continue
 		print("Shamir's Secret Sharing tests failed at n=" + n*i + ", t=" + t*i + ", on " + (exponent ? "exponent" : "base"))
 		print("Secret:\n" + secret.toString())
 		print("Recons:\n" + recons.toString())
@@ -84,7 +93,7 @@ function testShamir(n, t, it=1, exponent=false) {
 		return false
 	}
 	console.timeEnd("Shamir tests")
-	if (DEBUG) print("Shamir's Secret Sharing tests successful.")
+	if (DEBUG) print("Shamir's Secret Sharing tests on " + (exponent ? "exponent" : "base") + " successful.")
 	return true
 }
 
@@ -139,17 +148,17 @@ function shamirCombineShares(shares, group, exponent=false) {
 			lambda_i = lambda_i.mulMod(temp, ord)
 		}
 		if (exponent) at_0 = at_0.mulMod(at_i.powMod(lambda_i, mod), mod)
-		else at_0 = at_0.addMod(at_i.mulMod(lambda_i, ord), ord) //! Addition is legal only on exponents
+		else at_0 = at_0.addMod(at_i.mulMod(lambda_i, ord), ord) //* Exponent group is additive
 	}
 	return at_0
 }
 
-function shamirGenShares(secret, n, t, group, exponent=false) {
+function shamirGenShares(secret, n, t, group) {
 	/**
 	 * Takes a secret (that can be turned into bigInteger) and divides it into n shares
 	 * with t of them necessary and sufficient to reveal the secret.
 	 */
-	const pnomial = genPol(new BigIntegerAdapter(secret), t, group, exponent)
+	const pnomial = genPol(new BigIntegerAdapter(secret), t, group)
 	const shares = []
 	for (let i = 1; i <= n; i++) {
 		shares.push([i, evalPol(pnomial, i, group)])
@@ -157,7 +166,7 @@ function shamirGenShares(secret, n, t, group, exponent=false) {
 	return shares
 }
 
-function genPol(secret, t, group, exponent=false) {
+function genPol(secret, t, group) {
 	/**
 	 * Constructs a degree t-1 polynomial where
 	 * a_0 = secret, needs to be in the exponent range
@@ -166,18 +175,18 @@ function genPol(secret, t, group, exponent=false) {
 	 */
 	const pnomial = [secret]
 	for (let i = 1; i < t; i++) {
-		const rand = exponent ? group.randomElement() : group.randomExponent()
+		const rand = group.randomExponent()
 		pnomial.push(rand)
 	}
 	return pnomial
 }
 
-function evalPol(pol, x, group, exponent=false) {
+function evalPol(pol, x, group) {
 	/**
 	 * Evaluates the polynomial at x in the exponents of the given group
 	 */
 	x = new BigIntegerAdapter(x)
-	const mod = exponent ? group.modulus : group.order
+	const mod = group.order
 	let sum = new BigIntegerAdapter(0)
 	for(let i = 0; i < pol.length; i++) {
 		const x_i = pol[i].mulMod(x.powMod(i, mod), mod)
