@@ -24,37 +24,6 @@ function testAll(it=5) {
 	const exponentShamirTest = testShamir(3, 2, it, true)
 }
 
-function testPolynomials(it) {
-	if (DEBUG) print("Testing polynomial operations.")
-	const G = new PrimeGroup()
-	console.time("Polynomial tests")
-	for (let i = 1; i <= it; i++) {
-		console.time("Polynomial test #"+i)
-		const a0 = G.randomExponent()
-		const pol = genPol(a0, 5*i, G)
-		if (VERBOSE) {
-			for (let i = 0; i < pol.length; i++) {
-				const term = pol[i].toString()
-				print(term + "x^" + i, newline=false)
-			}
-			print()
-		}
-		const eval_at_0 = evalPol(pol, 0, G)
-		console.timeEnd("Polynomial test #"+i)
-		if (a0.eq(eval_at_0)) continue
-		print("Polynomial test failed.")
-		if (DEBUG) {
-			print("Constant term chosen:\n" + a0.toString())
-			print("Constant term evaluated:\n" + eval_at_0.toString())
-		}
-		console.timeEnd("Polynomial tests")
-		return false
-	}
-	console.timeEnd("Polynomial tests")
-	if (DEBUG) print("Polynomial tests successful.")
-	return true
-}
-
 function testShamir(n, t, it=1, exponent=false) {
 	const G = new PrimeGroup()
 	const modulus = G.modulus
@@ -94,6 +63,37 @@ function testShamir(n, t, it=1, exponent=false) {
 	}
 	console.timeEnd("Shamir tests")
 	if (DEBUG) print("Shamir's Secret Sharing tests on " + (exponent ? "exponent" : "base") + " successful.")
+	return true
+}
+
+function testPolynomials(it) {
+	if (DEBUG) print("Testing polynomial operations.")
+	const G = new PrimeGroup()
+	console.time("Polynomial tests")
+	for (let i = 1; i <= it; i++) {
+		console.time("Polynomial test #"+i)
+		const a0 = G.randomExponent()
+		const pol = genPol(a0, 5*i, G)
+		if (VERBOSE) {
+			for (let i = 0; i < pol.length; i++) {
+				const term = pol[i].toString()
+				print(term + "x^" + i, newline=false)
+			}
+			print()
+		}
+		const eval_at_0 = evalPol(pol, 0, G)
+		console.timeEnd("Polynomial test #"+i)
+		if (a0.eq(eval_at_0)) continue
+		print("Polynomial test failed.")
+		if (DEBUG) {
+			print("Constant term chosen:\n" + a0.toString())
+			print("Constant term evaluated:\n" + eval_at_0.toString())
+		}
+		console.timeEnd("Polynomial tests")
+		return false
+	}
+	console.timeEnd("Polynomial tests")
+	if (DEBUG) print("Polynomial tests successful.")
 	return true
 }
 
