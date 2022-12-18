@@ -7,14 +7,16 @@ const VERBOSE = false //! Keep this false as well.
 
 // --- TESTS ---
 
-function testAll(it=5) {
+async function testAll(it=5) {
 	const secret = "Meaning of life."
+	console.time("\nTotal runtime for tests")
 	const groupTest = testGroup(it)
 	const polTest = testPolynomials(it)
 	const baseShamirTest = testShamir(3, 2, it, false)
 	const exponentShamirTest = testShamir(3, 2, it, true)
-	const OPRFTest = testOPRF(secret)
-	const tOPRFTest = testT_OPRF(secret, 3, 2, it)
+	const OPRFTest = await testOPRF(secret)
+	const tOPRFTest = await testT_OPRF(secret, 3, 2, it)
+	console.timeEnd("\nTotal runtime for tests")
 }
 
 async function testT_OPRF(secret, n, t, it) {
@@ -27,7 +29,7 @@ async function testT_OPRF(secret, n, t, it) {
 		console.time("t-OPRF test #" + i + ": n=" + n*i + ", t=" + t*i)
 		const key = G.randomExponent()
 		const result = Hp_x.powMod(key, G.modulus)
-		var keys = shamirGenShares(key, n*i, t*i, G)
+		var keys = shamirGenShares(key, n*i, t*i, G).slice(0, t*i)
 		if (VERBOSE) { // May help reduce a loop
 			printVerbose("Generated key shares:", color="magenta")
 			for (const key_i of keys)
