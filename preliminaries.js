@@ -2,7 +2,7 @@ const { group } = require("console")
 const { truncate } = require("fs")
 const { BigInteger } = require("jsbn")
 
-const DEBUG = false //! Keep this FALSE for release. It prints out secret values.
+const DEBUG = false //! Keep this false for release. It prints out secret values.
 const VERBOSE = false //! Keep this false as well.
 
 // --- TESTS ---
@@ -16,43 +16,45 @@ async function testAll(it=5) {
 	const exponentShamirTest = testShamir(3, 2, it, true)
 	const OPRFTest = await testOPRF(secret)
 	const tOPRFTest = await testT_OPRF(secret, 3, 2, it)
+	const tOPRFTestLambda = await testT_OPRF(secret, 3, 2, it, true)
 	console.timeEnd("\nTotal runtime for tests")
 }
 
-async function testT_OPRF(secret, n, t, it) {
+async function testT_OPRF(secret, n, t, it, lambdas=false) {
 	// TODO: Make sure the time starts on consistent lines
 	const G = new PrimeGroup()
 	var Hp_x = await hashPrime(secret, G)
 	Hp_x = new BigIntegerAdapter(Hp_x, 16)
-	console.time("t-OPRF tests")
+	console.time("t-OPRF tests with" + (lambdas ? "" : "out") + " lambdas pre-calculated")
 	for (let i = 1; i <= it; i++) {
 		console.time("t-OPRF test #" + i + ": n=" + n*i + ", t=" + t*i)
 		const key = G.randomExponent()
 		const result = Hp_x.powMod(key, G.modulus)
 		var keys = shamirGenShares(key, n*i, t*i, G).slice(0, t*i)
 		if (VERBOSE) { // May help reduce a loop
-			printVerbose("Generated key shares:", color="magenta")
+			printVerbose("Generated key shares:")
 			for (const key_i of keys)
-				printVerbose("\tKey #" + key_i[0] + ": " + key_i[1].toString(), color="magenta")
+				printVerbose("\tKey #" + key_i[0] + ": " + key_i[1].toString())
 		}
 		const [ro, alpha] = await oprfMask(secret, G)
 		const betas = []
 		for (let i = 1; i <= keys.length; i++) {
-			let key_i = keys[i-1]
-			betas.push([key_i[0], await oprfChallenge(alpha, key_i[1], G)])
+			const key_i = keys[i-1]
+			const beta_i = [key_i[0], await oprfChallenge(alpha, key_i[1], G)]
+			if (lambdas) beta_i.push(calculateLambda(i, keys.length, G.order))
+			betas.push(beta_i)
 		}
 		const resp = await oprfResponse(betas, ro, G)
 		console.timeEnd("t-OPRF test #" + i + ": n=" + n*i + ", t=" + t*i)
 		const check = result.eqMod(resp, G.modulus)
-		printDebug("t-OPRF test #" + "i " + (check ? "successful." : "failed."), color= (check ? "green" : "red"))
 		if (check) continue
-		printError("t-OPRFtests failed at n=" + n*i + ", t=" + t*i + ".", color="red")
-		printError("Result:\n" + result.toString(), color="red")
-		printError("Response:\n" + resp.toString(), color="red")
-		console.timeEnd("t-OPRF tests")
+		printError("t-OPRFtests failed at n=" + n*i + ", t=" + t*i)
+		printError("Result:\n" + result.toString())
+		printError("Response:\n" + resp.toString())
+		console.timeEnd("t-OPRF tests with" + (lambdas ? "" : "out") + " lambdas pre-calculated")
 		return false
 	}
-	console.timeEnd("t-OPRF tests")
+	console.timeEnd("t-OPRF tests with" + (lambdas ? "" : "out") + " lambdas pre-calculated")
 	return true
 }
 
@@ -190,7 +192,7 @@ function shamirCombineShares(shares, group, exponent=false) {
 	for (const point of shares) {
 		const i = point[0] // int, not bigInt
 		const at_i = point[1]
-		var lambda_i = lambdas ? point[3] : calculateLambda(i, n, ord)
+		var lambda_i = lambdas ? point[2] : calculateLambda(i, n, ord)
 		if (exponent) at_0 = at_0.mulMod(at_i.powMod(lambda_i, mod), mod)
 		else at_0 = at_0.addMod(at_i.mulMod(lambda_i, ord), ord) //* Exponent group is additive
 	}
@@ -262,11 +264,16 @@ async function oprfResponse(betas, ro, group) {
 	 * If using t-OPRF, pass betas as an array. Otherwise pass a BigIntegerAdapter.
 	 */
 	const threshold =  !(betas instanceof BigIntegerAdapter)
-	if (!threshold) 
+	const lambdas = threshold && betas[0].length == 3
+	if (!threshold) // betas is actually a single beta in this case
 		return betas.powMod(ro.invMod(group.order), group.modulus)
-	shares = []
+	const shares = []
 	for (const beta of betas) {
-		shares.push([beta[0], await oprfResponse(beta[1], ro, group)])
+		const index = beta[0]
+		const toRoInv = await oprfResponse(beta[1], ro, group)
+		const share = [index, toRoInv]
+		if (lambdas) share.push(betas[2])
+		shares.push(share)
 	}
 	return shamirCombineShares(shares, group, true)
 }
