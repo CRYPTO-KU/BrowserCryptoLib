@@ -174,21 +174,23 @@ function shamirCombineShares(shares, group, exponent=false) {
 	 * * Does not check for n, t values! If not enough shares are
 	 * * given, simply returns a wrong value. Giving more than enough
 	 * * shares does not change the output.
+	 * Pass lambdas as the third elements of shares if they are
+	 * precomputed, i.e., shares[i] = [x_i, y_i, lambda_i]. Otherwise
+	 * pass each share as tuples, i.e., shares[i] = [x_i, y_i].
+	 * 
+	 * @Input shares: A vector of shares where each share is of the form [int, BigIntegerAdapter, BigIntegerAdapter?]
+	 * @Input group: A PrimeGroup object determining the modulus of operations
+	 * @Input exponent: A boolean determining whether the interpolation will be done on the exponents
 	 */
 	const n = shares.length
 	const mod = group.modulus
 	const ord = group.order
 	let at_0 = exponent ? new BigIntegerAdapter(1) : new BigIntegerAdapter(0)
+	const lambdas = shares.length == 3
 	for (const point of shares) {
 		const i = point[0] // int, not bigInt
 		const at_i = point[1]
-		let lambda_i = new BigIntegerAdapter(1)
-		for (let j = 1; j <= n; j++) {
-			if (i == j) continue
-			const inv = (new BigIntegerAdapter(j-i)).invMod(ord) // 1/j-i
-			const temp = inv.mulMod(j, ord) // j/j-i
-			lambda_i = lambda_i.mulMod(temp, ord)
-		}
+		var lambda_i = lambdas ? point[3] : calculateLambda(i, n, ord)
 		if (exponent) at_0 = at_0.mulMod(at_i.powMod(lambda_i, mod), mod)
 		else at_0 = at_0.addMod(at_i.mulMod(lambda_i, ord), ord) //* Exponent group is additive
 	}
@@ -206,6 +208,20 @@ function shamirGenShares(secret, n, t, group) {
 		shares.push([i, evalPol(pnomial, i, group)])
 	}
 	return shares
+}
+
+function calculateLambda(i, n, order) {
+	/**
+	 * Calculates the Lagrange interpolation coefficient for x = i and x_0 = 0.
+	 */
+	lambda_i = new BigIntegerAdapter(1)
+	for (let j = 1; j <= n; j++) {
+		if (i == j) continue
+		const inv = (new BigIntegerAdapter(j-i)).invMod(order) // 1/j-i
+		const temp = inv.mulMod(j, order) // j/j-i
+		lambda_i = lambda_i.mulMod(temp, order)
+	}
+	return lambda_i
 }
 
 function genPol(secret, t, group) {
@@ -316,8 +332,7 @@ async function hash(str) {
 }
 //--- Hash end ---
 
-//--- Some helpful functions ---
-
+//--- Classes ---
 class PrimeGroup {
 	// We work on a fixed group with generator 2.
 	// ! Hardcoding may be problematic for any sort of production code.
@@ -463,6 +478,9 @@ class BigIntegerAdapter {
 
 }
 
+//--- Classes end ---
+
+//--- Some helpful functions ---
 function toArrayBuffer(buf) {
 	/**
 	 * This is a simple function that transforms Buffer data into BufferArray data.
