@@ -8,31 +8,77 @@ const VERBOSE = false //! Keep this false as well.
 // --- TESTS ---
 
 function testAll(it=5) {
+	const secret = "Meaning of life."
 	const groupTest = testGroup(it)
 	const polTest = testPolynomials(it)
 	const baseShamirTest = testShamir(3, 2, it, false)
 	const exponentShamirTest = testShamir(3, 2, it, true)
-	const OPRFTest = testOPRF("Meaning of life")
+	const OPRFTest = testOPRF(secret)
+	const tOPRFTest = testT_OPRF(secret, 3, 2, it)
 }
 
-async function testOPRF(secret, exponent=false) {
+async function testT_OPRF(secret, n, t, it) {
+	// TODO: Make sure the time starts on consistent lines
 	const G = new PrimeGroup()
-	console.time((exponent ? "t-" : "") + "OPRF test")
 	var Hp_x = await hashPrime(secret, G)
 	Hp_x = new BigIntegerAdapter(Hp_x, 16)
-	const [ro, alpha] = await oprfMask(secret, G)
-	const k = G.randomExponent()
-	const beta = await oprfChallenge(alpha, k, G)
-	const resp = await oprfResponse(beta, ro, G)
-	check = Hp_x.powMod(k, G.modulus).eqMod(resp, G.modulus)
-	if (DEBUG) {
-		print(`ro: ${ro.toString()} \t`)
-		print(`alpha: ${alpha.toString()} \t`)
-		print(`beta: ${beta.toString()} \t`)
-		print(`resp: ${resp.toString()} \t`)
+	console.time("t-OPRF tests")
+	for (let i = 1; i <= it; i++) {
+		console.time("t-OPRF test #" + i + ": n=" + n*i + ", t=" + t*i)
+		const key = G.randomExponent()
+		const result = Hp_x.powMod(key, G.modulus)
+		var keys = shamirGenShares(key, n*i, t*i, G)
+		if (VERBOSE) { // May help reduce a loop
+			printVerbose("Generated key shares:", color="magenta")
+			for (const key_i of keys)
+				printVerbose("\tKey #" + key_i[0] + ": " + key_i[1].toString(), color="magenta")
+		}
+		const [ro, alpha] = await oprfMask(secret, G)
+		const betas = []
+		for (let i = 1; i <= keys.length; i++) {
+			let key_i = keys[i-1]
+			betas.push([key_i[0], await oprfChallenge(alpha, key_i[1], G)])
+		}
+		const resp = await oprfResponse(betas, ro, G)
+		console.timeEnd("t-OPRF test #" + i + ": n=" + n*i + ", t=" + t*i)
+		const check = result.eqMod(resp, G.modulus)
+		printDebug("t-OPRF test #" + "i " + (check ? "successful." : "failed."), color= (check ? "green" : "red"))
+		if (check) continue
+		printError("t-OPRFtests failed at n=" + n*i + ", t=" + t*i + ".", color="red")
+		printError("Result:\n" + result.toString(), color="red")
+		printError("Response:\n" + resp.toString(), color="red")
+		console.timeEnd("t-OPRF tests")
+		return false
 	}
-	console.timeEnd((exponent ? "t-" : "") + "OPRF test")
-	print((exponent ? "t-" : "") + "OPRF test " + (check ? "successful." : "failed."))
+	console.timeEnd("t-OPRF tests")
+	return true
+}
+
+async function testOPRF(secret) {
+	/**
+	 * Chooses a random key uniform in group exponents and
+	 * completes an OPRF within itself. How oblivious...
+	 */
+	printDebug("Testing OPRF.", color="orange")
+	const G = new PrimeGroup()
+	console.time("OPRF test")
+	var Hp_x = await hashPrime(secret, G)
+	Hp_x = new BigIntegerAdapter(Hp_x, 16)
+	const key = G.randomExponent()
+	const result = Hp_x.powMod(key, G.modulus)
+	const [ro, alpha] = await oprfMask(secret, G)
+	const beta = await oprfChallenge(alpha, key, G)
+	const resp = await oprfResponse(beta, ro, G)
+	const check = result.eqMod(resp, G.modulus)
+
+	printVerbose(`key: ${key.toString()} \n`, color="orange")
+	printVerbose(`result: ${result.toString()} \n`, color="orange")
+	printVerbose(`ro: ${ro.toString()} \n`, color="orange")
+	printVerbose(`alpha: ${alpha.toString()} \n`, color="orange")
+	printVerbose(`beta: ${beta.toString()} \n`, color="orange")
+	printVerbose(`resp: ${resp.toString()} \n`, color="orange")
+		
+	console.timeEnd("OPRF test")
 	return check
 }
 
@@ -40,16 +86,15 @@ function testShamir(n, t, it, exponent=false) {
 	const G = new PrimeGroup()
 	const modulus = G.modulus
 	const order = G.order
-	if (DEBUG) print("Testing Shamir's Secret Sharing on " + (exponent ? "exponent" : "base"))
 	console.time("Shamir tests")
 	for (let i = 1; i <= it; i++) {
-		console.time("Test #" + i + ": n=" + n*i + ", t=" + t*i)
+		console.time("Shamir test on " + (exponent ? "exponent" : "base") + " #" + i + ": n=" + n*i + ", t=" + t*i)
 		const secret = G.randomExponent()
 		const shares = shamirGenShares(secret, n*i, t*i, G)
-		if (VERBOSE) {
-			print("Generated shares:")
+		if (VERBOSE) { // This redundant check may reduce unnecessary loops
+			printVerbose("Generated shares:")
 			for (const share of shares)
-				print("\tShare #" + share[0] + ": " + share[1].toString())
+				printVerbose("\tShare #" + share[0] + ": " + share[1].toString())
 		}
 		if (exponent) {
 			let elm = G.randomElement()
@@ -59,59 +104,44 @@ function testShamir(n, t, it, exponent=false) {
 			
 		}
 		const recons = shamirCombineShares(shares.slice(0, t*i), G, exponent)
-		if (VERBOSE) {
-			print("Secret reconstructed:")
-			print("\tOriginal secret: " + secret.toString())
-			print("\tReconstructed secret: " + recons.toString())
-		}
-		console.timeEnd("Test #" + i + ": n=" + n*i + ", t=" + t*i)
+		printVerbose("Secret reconstructed:")
+		printVerbose("\tOriginal secret: " + secret.toString())
+		printVerbose("\tReconstructed secret: " + recons.toString())
+		console.timeEnd("Shamir test on " + (exponent ? "exponent" : "base") + " #" + i + ": n=" + n*i + ", t=" + t*i)
 		var check = exponent ? secret_elm.eqMod(recons, modulus) : secret.eqMod(recons, order)
 		if (check) continue
-		print("Shamir's Secret Sharing tests failed at n=" + n*i + ", t=" + t*i + ", on " + (exponent ? "exponent" : "base"))
-		print("Secret:\n" + secret.toString())
-		print("Recons:\n" + recons.toString())
+		printError("Shamir's Secret Sharing tests on " + (exponent ? "exponent" : "base") + " failed at n=" + n*i + ", t=" + t*i)
+		printError("Secret:\n" + secret.toString())
+		printError("Recons:\n" + recons.toString())
 		console.timeEnd("Shamir tests")
 		return false
 	}
 	console.timeEnd("Shamir tests")
-	if (DEBUG) print("Shamir's Secret Sharing tests on " + (exponent ? "exponent" : "base") + " successful.")
 	return true
 }
 
 function testPolynomials(it) {
-	if (DEBUG) print("Testing polynomial operations.")
 	const G = new PrimeGroup()
 	console.time("Polynomial tests")
 	for (let i = 1; i <= it; i++) {
 		console.time("Polynomial test #"+i)
 		const a0 = G.randomExponent()
 		const pol = genPol(a0, 5*i, G)
-		if (VERBOSE) {
-			for (let i = 0; i < pol.length; i++) {
-				const term = pol[i].toString()
-				print(term + "x^" + i, newline=false)
-			}
-			print()
-		}
 		const eval_at_0 = evalPol(pol, 0, G)
 		console.timeEnd("Polynomial test #"+i)
 		if (a0.eq(eval_at_0)) continue
-		print("Polynomial test failed.")
-		if (DEBUG) {
-			print("Constant term chosen:\n" + a0.toString())
-			print("Constant term evaluated:\n" + eval_at_0.toString())
-		}
+		printError("Polynomial test failed.")
+		printError("Constant term chosen:\n" + a0.toString())
+		printError("Constant term evaluated:\n" + eval_at_0.toString())
 		console.timeEnd("Polynomial tests")
 		return false
 	}
 	console.timeEnd("Polynomial tests")
-	if (DEBUG) print("Polynomial tests successful.")
 	return true
 }
 
 function testGroup(it) {
 	const G = new PrimeGroup()
-	if (DEBUG) print("Testing inversion.")
 	console.time("Group tests")
 	for (let i = 1; i <= it; i++) {
 		console.time("Group test #"+i)
@@ -119,17 +149,15 @@ function testGroup(it) {
 		let x_inv = x.invMod(G.modulus)
 		let e = x.mulMod(x_inv, G.modulus)
 		console.timeEnd("Group test #"+i)
-		if (e == 1) continue
-		print("Inversion failed. e: " + e.toString())
-		if (VERBOSE) {
-			print("Random x: " + x.toString())
-			print("Calculated x inverse: " + x_inv.toString())
-		}
+		const check = e == 1
+		if (check) continue
+		printError("Inversion failed. e: " + e.toString())
+		printError("Random x: " + x.toString())
+		printError("Calculated x inverse: " + x_inv.toString())
 		console.timeEnd("Group tests")
 		return false
 	}
 	console.timeEnd("Group tests")
-	if (DEBUG) print("Group tests successful.")
 	return true
 }
 
@@ -210,11 +238,19 @@ function evalPol(pol, x, group) {
 
 //--- OPRF functions ---
 
-async function oprfResponse(beta, ro, group) {
+async function oprfResponse(betas, ro, group) {
 	/**
 	 * Return beta^(ro^-1) = alpha^(k*(ro^-1)) = Hp_x^(ro*k*(ro^-1)) = Hp_x^k
+	 * If using t-OPRF, pass betas as an array. Otherwise pass a BigIntegerAdapter.
 	 */
-	return beta.powMod(ro.invMod(group.order), group.modulus)
+	const threshold =  !(betas instanceof BigIntegerAdapter)
+	if (!threshold) 
+		return betas.powMod(ro.invMod(group.order), group.modulus)
+	shares = []
+	for (const beta of betas) {
+		shares.push([beta[0], await oprfResponse(beta[1], ro, group)])
+	}
+	return shamirCombineShares(shares, group, true)
 }
 
 async function oprfChallenge(alpha, k, group) {
@@ -223,7 +259,7 @@ async function oprfChallenge(alpha, k, group) {
 	 */
 	return alpha.powMod(k, group.modulus)
 }
-	
+
 async function oprfMask(secret, group) {
 	/**
 	 * Creates the masked text to be sent to each SP.
@@ -236,7 +272,7 @@ async function oprfMask(secret, group) {
 	 */
 	const ro = group.randomElement()
 	const Hp_x = await hashPrime(secret, group)
-	if(VERBOSE) print("Hp_x: " + Hp_x)
+	printVerbose("Hp_x: " + Hp_x)
 	var Hp_xToRo = new BigIntegerAdapter(Hp_x, 16)
 	Hp_xToRo = Hp_xToRo.powMod(ro, group.modulus)
 	return [ro, Hp_xToRo]
@@ -274,7 +310,6 @@ async function hash(str) {
 	}
 	let hash = await Crypto.subtle.digest("SHA-256", data)
 	hash = Buffer.from(hash).toString("hex")
-	if(hash.length != 64) print("Error: Hash is not 256 bits: l= " + hash.length*4, color="red")
 	return hash
 }
 //--- Hash end ---
@@ -440,6 +475,8 @@ function toArrayBuffer(buf) {
 
 function print(T='', newline=true, html=false, color="") {
 	/**
+	 * TODO: Fix this
+	 * ! Printing with color does not work, JS and default arguments act unlike Python.
 	 * This is a shorthand function for printing to the console or the process.
 	 * The coloring only works on console printing with newline, because I am lazy.
 	 */
@@ -452,6 +489,19 @@ function print(T='', newline=true, html=false, color="") {
 	else
 		console.log(T)
 }
+
+function printDebug(T) {
+	if(DEBUG) console.log("%c" + T, "color: orange")
+}
+
+function printVerbose(T) {
+	if(VERBOSE) console.log("%c" + T, "color: magenta")
+}
+
+function printError(T) {
+	console.log("%c" + T, "color: red")
+}
+
 //--- Helpful functions end ---
 
 // This check protects importing scripts from running main().
