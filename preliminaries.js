@@ -1,4 +1,7 @@
 /* eslint-disable camelcase */
+
+const { exit } = require('process');
+
 // ! Keep the below false for release. They print out secret values.
 const DEBUG = false;
 const VERBOSE = false;
@@ -443,6 +446,67 @@ async function hash(str) {
  * and prime modulus. The default values are hard coded,
  * which should be changed.
  */
+class PrimeGroup2 {
+  /**
+   * @param {BigIntegerAdapter} modLen
+   * @param {BigIntegerAdapter} oLen
+   * @param {BigIntegerAdapter} stat
+   */
+  constructor(modLen, oLen, stat) {
+    // Check preconditions
+    if (modLen < 512) {
+      printError('Tried to create a group with modulus length < 512');
+      modLen = 512;
+    }
+    if (oLen < 160) {
+      printError('Tried to create a group with order length < 160');
+      oLen = 160;
+    }
+    if (oLen < 2*stat) {
+      printError('Tried to create a group with order length < 2*stat');
+      oLen = 2*stat;
+    }
+    this.stat = stat;
+    // Decide an order
+    this.order = genPrime(oLen, stat); // TODO
+
+    // Find a prime modulus
+    const factLen = modLen - oLen;
+    let factor;
+    do {
+      factor = BigIntegerAdapter.randomLen(factLen);
+      this.modulus = this.order.times(factor).add(1);
+    } while (!probPrime(this.modulus, this.stat) | // TODO
+                        this.modulus.bitLen() != modLen);
+
+    // Come up with a generator
+    let gen = new BigIntegerAdapter(1);
+    while (gen.eq(1)) {
+      const gammaPrime = BigIntegerAdapter.randomMod(this.modulus);
+      gen = gammaPrime.powMod(factor, this.modulus);
+    }
+    this.generator = gen;
+
+    // Check post conditions
+    if (this.modulus.bitLen() != modLen) {
+      printError('Generated modulus does not satisfy'+
+                  'necessary bit length!');
+      exit(1); // TODO: Maybe exception?
+    }
+    if (this.order.bitLen() != oLen) {
+      printError('Generated order does not satisfy'+
+                  'necessary bit length!');
+      exit(1); // TODO: Maybe exception?
+    }
+  }
+}
+
+
+/**
+ * A PrimeGroup class representing a group of prime order
+ * and prime modulus. The default values are hard coded,
+ * which should be changed.
+ */
 class PrimeGroup {
   // We work on a fixed group with generator 2.
   // ! Hardcoding may be problematic for any sort of production code.
@@ -484,22 +548,10 @@ class PrimeGroup {
   }
   /**
    * Generates a random exponent.
-   * @return {BigIntegerAdapter} A random BigIntegerAdapter between 1 and order.
+   * @return {BigIntegerAdapter} A random number between 0 and order-1.
    */
   randomExponent() {
-    // ! NOT SECURE YET, BUT WORKS NICELY ENOUGH. NEED TO TAKE CARE OF BIASING.
-    // Get a random number
-    let Crypto;
-    if (typeof require !== 'undefined' && require.main === module) {
-      Crypto = require('crypto');
-    } else {
-      Crypto = self.crypto;
-    }
-    let rnd = Crypto.getRandomValues(new Uint8Array(32)); // ArrayBuffer
-    rnd = Buffer.from(rnd).toString('hex'); // Hex
-    // Transform to BigIntegerAdapter
-    rnd = new BigIntegerAdapter(rnd, 16);
-    return rnd.mod(this.order);
+    return BigIntegerAdapter.randomMod(this.order);
   }
 
   /**
@@ -704,6 +756,50 @@ class BigIntegerAdapter {
   }
 
   // Other functionalities
+
+  /**
+   * Generates a random number of given bit length.
+   * @param {int} len Bit size of random number
+   * @return {BigIntegerAdapter} rnd in {0, 1}^len
+   */
+  static randomLen(len) {
+    // * No modulo operations, no biasing.
+    // Decide on Crypto interface
+    let Crypto;
+    if (typeof require !== 'undefined' && require.main === module) {
+      Crypto = require('crypto');
+    } else {
+      Crypto = self.crypto;
+    }
+    // Create a random ArrayBuffer
+    const upLen = Math.ceil(len/8);
+    let rnd = Crypto.getRandomValues(new Uint8Array(upLen)); // Uint8Array
+    // Remove unneeded bits
+    const necessaryBits = 8 - upLen*8 - len;
+    rnd[0] = rnd[0] & parseInt('1'.repeat(necessaryBits), 2);
+    // Transform to BigIntegerAdapter
+    rnd = Buffer.from(rnd).toString('hex'); // Hex
+    return new BigIntegerAdapter(rnd, 16);
+  }
+
+  /**
+   * Generate a random number between 0 and mod-1.
+   * @param {int | BigIntegerAdapter} mod Upper bound
+   * @return {BigIntegerAdapter} 0 <= rnd < mod
+   */
+  static randomMod(mod) {
+    // ! Careful, biasing unhandled!
+    return BigIntegerAdapter.randomLen(mod.bitLen()).mod(mod);
+  }
+
+  /**
+   * Returns the number of digits required to represent
+   * value in binary.
+   * @return {int} Bit length of value
+   */
+  bitLen() {
+    return this.value.bitLength();
+  }
 
   /**
    * Creates a string representation of the encapsulated value in given radix.
