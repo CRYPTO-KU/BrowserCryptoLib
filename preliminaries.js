@@ -476,7 +476,7 @@ class PrimeGroup2 {
     do {
       factor = BigIntegerAdapter.randomLen(factLen);
       this.modulus = this.order.times(factor).add(1);
-    } while (!probPrime(this.modulus, this.stat) | // TODO
+    } while (!this.modulus.probPrime(this.stat) |
                         this.modulus.bitLen() != modLen);
 
     // Come up with a generator
@@ -799,6 +799,19 @@ class BigIntegerAdapter {
    */
   bitLen() {
     return this.value.bitLength();
+  }
+
+  /**
+   * Returns true if value is very likely to be prime,
+   * false otherwise. Always returns true if value is
+   * prime, but may also return true if value is composite,
+   * with 4^-iterations chance.
+   * @param {int} iterations Test count
+   * @return {boolean} Whether value is prime
+   */
+  probPrime(iterations) {
+    // ! This uses Math.random, which is insecure.
+    return this.value.probPrime(iterations);
   }
 
   /**
