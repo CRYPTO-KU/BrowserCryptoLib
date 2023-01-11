@@ -1,12 +1,19 @@
 /* eslint-disable camelcase */
-
-const { exit } = require('process');
-
 // ! Keep the below false for release. They print out secret values.
 const DEBUG = false;
 const VERBOSE = false;
-
+iterations = 0;
 // --- TESTS ---
+
+// eslint-disable-next-line require-jsdoc
+function manualTest() {
+  const G = new PrimeGroup2(2048, 256, 5);
+  print('New PrimeGroup generated.');
+  print('Modulus: ' + G.modulus.toString(16));
+  print('Order: ' + G.order.toString(16));
+  print('Generator: ' + G.generator.toString(16));
+}
+
 
 /**
  * Runs all tests.
@@ -468,16 +475,24 @@ class PrimeGroup2 {
     }
     this.stat = stat;
     // Decide an order
-    this.order = genPrime(oLen, stat); // TODO
+    this.order = BigIntegerAdapter.randomPrime(oLen, stat);
+    print('Order bit Length: ' + this.order.bitLen());
 
     // Find a prime modulus
     const factLen = modLen - oLen;
     let factor;
+    print('Finding a factor');
+    let iterations = 0;
+    let a; let b;
     do {
       factor = BigIntegerAdapter.randomLen(factLen);
       this.modulus = this.order.times(factor).add(1);
-    } while (!this.modulus.probPrime(this.stat) |
-                        this.modulus.bitLen() != modLen);
+      if (iterations++ % 20 == 0) print('Iteration: ' + iterations);
+      a = !this.modulus.probPrime(this.stat);
+      b = this.modulus.bitLen() != modLen;
+      if (!a) print('Modulus is prime!');
+    } while (a || b);
+    print('Found a factor');
 
     // Come up with a generator
     let gen = new BigIntegerAdapter(1);
@@ -489,14 +504,14 @@ class PrimeGroup2 {
 
     // Check post conditions
     if (this.modulus.bitLen() != modLen) {
-      printError('Generated modulus does not satisfy'+
-                  'necessary bit length!');
-      exit(1); // TODO: Maybe exception?
+      throw new Error('Prime Modulus does not satisfy necessary bit length.', {
+        cause: {code: 'BitLength', values: [this.modulus]},
+      });
     }
     if (this.order.bitLen() != oLen) {
-      printError('Generated order does not satisfy'+
-                  'necessary bit length!');
-      exit(1); // TODO: Maybe exception?
+      throw new Error('Prime Order does not satisfy necessary bit length.', {
+        cause: {code: 'BitLength', values: [this.order]},
+      });
     }
   }
 }
@@ -775,7 +790,7 @@ class BigIntegerAdapter {
     const upLen = Math.ceil(len/8);
     let rnd = Crypto.getRandomValues(new Uint8Array(upLen)); // Uint8Array
     // Remove unneeded bits
-    const necessaryBits = 8 - upLen*8 - len;
+    const necessaryBits = 8 - (upLen*8 - len);
     rnd[0] = rnd[0] & parseInt('1'.repeat(necessaryBits), 2);
     // Transform to BigIntegerAdapter
     rnd = Buffer.from(rnd).toString('hex'); // Hex
@@ -783,13 +798,31 @@ class BigIntegerAdapter {
   }
 
   /**
-   * Generate a random number between 0 and mod-1.
+   * Generates a random number between 0 and mod-1.
    * @param {int | BigIntegerAdapter} mod Upper bound
    * @return {BigIntegerAdapter} 0 <= rnd < mod
    */
   static randomMod(mod) {
     // ! Careful, biasing unhandled!
     return BigIntegerAdapter.randomLen(mod.bitLen()).mod(mod);
+  }
+
+  /**
+   * Generates a random probable prime of desired bit-length.
+   * @param {int} len The number of digits in the binary
+   * representation of the generated prime.
+   * @param {int} iterations The iterations for probable
+   * prime testing.
+   * @return {BigIntegerAdapter} A random probable prime
+   */
+  static randomPrime(len, iterations) {
+    printDebug('Generating a random prime of length ' + len + '.');
+    let rand;
+    do {
+      rand = BigIntegerAdapter.randomLen(len);
+    } while (!rand.probPrime(iterations));
+    printDebug('Prime generated.');
+    return rand;
   }
 
   /**
@@ -811,7 +844,7 @@ class BigIntegerAdapter {
    */
   probPrime(iterations) {
     // ! This uses Math.random, which is insecure.
-    return this.value.probPrime(iterations);
+    return this.value.isProbablePrime(iterations);
   }
 
   /**
@@ -895,5 +928,5 @@ function printError(T) {
 
 // This check protects importing scripts from running main().
 if (typeof require != 'undefined' && require.main == module) {
-  testAll();
+  manualTest();
 }
