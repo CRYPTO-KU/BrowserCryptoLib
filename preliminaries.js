@@ -7,7 +7,9 @@ iterations = 0;
 
 // eslint-disable-next-line require-jsdoc
 function manualTest() {
-  const G = new PrimeGroup2(2048, 256, 5);
+  console.time('Random Prime Generation');
+  const G = new PrimeGroup(2048, 256, 1);
+  console.timeEnd('Random Prime Generation');
   print('New PrimeGroup generated.');
   print('Modulus: ' + G.modulus.toString(16));
   print('Order: ' + G.order.toString(16));
@@ -450,14 +452,18 @@ async function hash(str) {
 // --- Classes ---
 /**
  * A PrimeGroup class representing a group of prime order
- * and prime modulus. The default values are hard coded,
- * which should be changed.
+ * and prime modulus. Generates a random prime modulus and
+ * prime order of given bit lengths, and sets a generator.
  */
-class PrimeGroup2 {
+class PrimeGroup {
   /**
    * @param {BigIntegerAdapter} modLen
    * @param {BigIntegerAdapter} oLen
    * @param {BigIntegerAdapter} stat
+   * @throws {RangeError} If the generated primes do not satisfy
+   * given bit length conditions. If this is thrown, there is
+   * a bug with prime generation, so this should never happen
+   * under normal circumstances.
    */
   constructor(modLen, oLen, stat) {
     // Check preconditions
@@ -476,23 +482,41 @@ class PrimeGroup2 {
     this.stat = stat;
     // Decide an order
     this.order = BigIntegerAdapter.randomPrime(oLen, stat);
-    print('Order bit Length: ' + this.order.bitLen());
+
+    if (this.order.bitLen() != oLen) {
+      throw new RangeError('Prime Order does not satisfy'+
+        'necessary bit length.', {
+        cause: {code: 'BitLength', values: [this.order]},
+      });
+    }
 
     // Find a prime modulus
     const factLen = modLen - oLen;
     let factor;
-    print('Finding a factor');
     let iterations = 0;
     let a; let b;
+    let modulus;
     do {
-      factor = BigIntegerAdapter.randomLen(factLen);
-      this.modulus = this.order.times(factor).add(1);
-      if (iterations++ % 20 == 0) print('Iteration: ' + iterations);
-      a = !this.modulus.probPrime(this.stat);
-      b = this.modulus.bitLen() != modLen;
-      if (!a) print('Modulus is prime!');
+      const t0 = performance.now()
+      factor = BigIntegerAdapter.randomLen(factLen, true);
+      modulus = this.order.times(factor).add(1);
+      a = !modulus.probPrime(this.stat);
+      b = modulus.bitLen() != modLen;
+      if (!a) {
+        print('Modulus is prime!: ' + iterations);
+        print(modulus.bitLen());
+      }
+      iterations++;
+      const t1 = performance.now()
+      print(t1-t0 + 'milliseconds.');
     } while (a || b);
-    print('Found a factor');
+    this.modulus = modulus;
+    if (this.modulus.bitLen() != modLen) {
+      throw new RangeError('Prime Modulus does not satisfy'+
+        'necessary bit length.', {
+        cause: {code: 'BitLength', values: [this.modulus]},
+      });
+    }
 
     // Come up with a generator
     let gen = new BigIntegerAdapter(1);
@@ -501,82 +525,6 @@ class PrimeGroup2 {
       gen = gammaPrime.powMod(factor, this.modulus);
     }
     this.generator = gen;
-
-    // Check post conditions
-    if (this.modulus.bitLen() != modLen) {
-      throw new Error('Prime Modulus does not satisfy necessary bit length.', {
-        cause: {code: 'BitLength', values: [this.modulus]},
-      });
-    }
-    if (this.order.bitLen() != oLen) {
-      throw new Error('Prime Order does not satisfy necessary bit length.', {
-        cause: {code: 'BitLength', values: [this.order]},
-      });
-    }
-  }
-}
-
-
-/**
- * A PrimeGroup class representing a group of prime order
- * and prime modulus. The default values are hard coded,
- * which should be changed.
- */
-class PrimeGroup {
-  // We work on a fixed group with generator 2.
-  // ! Hardcoding may be problematic for any sort of production code.
-  // TODO: Reduce the size of this group
-
-  /**
-   * @param {BigIntegerAdapter} modulus
-   * @param {BigIntegerAdapter} generator
-   * @param {BigIntegerAdapter} order
-   */
-  constructor(modulus=0, generator=0, order=0) {
-    if (modulus==0) { //* Order 256-bit (or 512-bit)
-      // https://datatracker.ietf.org/doc/rfc3526/ | Group id 15
-      modulus = new BigIntegerAdapter( // prime modulus
-          'FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD1'+
-          '29024E088A67CC74020BBEA63B139B22514A08798E3404DD'+
-          'EF9519B3CD3A431B302B0A6DF25F14374FE1356D6D51C245'+
-          'E485B576625E7EC6F44C42E9A637ED6B0BFF5CB6F406B7ED'+
-          'EE386BFB5A899FA5AE9F24117C4B1FE649286651ECE45B3D'+
-          'C2007CB8A163BF0598DA48361C55D39A69163FA8FD24CF5F'+
-          '83655D23DCA3AD961C62F356208552BB9ED529077096966D'+
-          '670C354E4ABC9804F1746C08CA18217C32905E462E36CE3B'+
-          'E39E772C180E86039B2783A2EC07A28FB5C55DF06F4C52C9'+
-          'DE2BCBF6955817183995497CEA956AE515D2261898FA0510'+
-          '15728E5A8AAAC42DAD33170D04507A33A85521ABDF1CBA64'+
-          'ECFB850458DBEF0A8AEA71575D060C7DB3970F85A6E1E4C7'+
-          'ABF5AE8CDB0933D71E8C94E04A25619DCEE3D2261AD2EE6B'+
-          'F12FFA06D98A0864D87602733EC86A64521F2B18177B200C'+
-          'BBE117577A615D6C770988C0BAD946E208E24FA074E5AB31'+
-          '43DB5BFCE0FD108E4B82D120A93AD2CAFFFFFFFFFFFFFFFF', 16);
-      order = modulus.subtract(1).divide(2); // order of generator
-      generator = new BigIntegerAdapter(2); // generator = 2
-      // modulus = new BigIntegerAdapter(23)
-      // order = new BigIntegerAdapter(11)
-    }
-    this.modulus = new BigIntegerAdapter(modulus);
-    this.generator = new BigIntegerAdapter(generator);
-    this.order = new BigIntegerAdapter(order);
-  }
-  /**
-   * Generates a random exponent.
-   * @return {BigIntegerAdapter} A random number between 0 and order-1.
-   */
-  randomExponent() {
-    return BigIntegerAdapter.randomMod(this.order);
-  }
-
-  /**
-   * Generates a random group element.
-   * @return {BigIntegerAdapter} A random BigInteger between 1 and modulus
-   * such that it is an element of the group.
-   */
-  randomElement() {
-    /** Returns a random group element */
-    return this.generator.powMod(this.randomExponent(), this.modulus);
   }
 }
 
@@ -773,11 +721,17 @@ class BigIntegerAdapter {
   // Other functionalities
 
   /**
-   * Generates a random number of given bit length.
+   * Generates a random number of at most given bit length.
+   * Note that the returned number might have smaller
+   * bit length if the most significant bits are 0.
+   * Use the force parameter to assure that the bit
+   * length is exactly as given.
+   * Note that force=true implies len-1 bits of randomness.
    * @param {int} len Bit size of random number
+   * @param {bool} force Forces the first bit to be 1.
    * @return {BigIntegerAdapter} rnd in {0, 1}^len
    */
-  static randomLen(len) {
+  static randomLen(len, force=false) {
     // * No modulo operations, no biasing.
     // Decide on Crypto interface
     let Crypto;
@@ -792,6 +746,7 @@ class BigIntegerAdapter {
     // Remove unneeded bits
     const necessaryBits = 8 - (upLen*8 - len);
     rnd[0] = rnd[0] & parseInt('1'.repeat(necessaryBits), 2);
+    if (force) rnd[0] = rnd[0] | parseInt('1'+'0'.repeat(necessaryBits-1), 2);
     // Transform to BigIntegerAdapter
     rnd = Buffer.from(rnd).toString('hex'); // Hex
     return new BigIntegerAdapter(rnd, 16);
@@ -819,7 +774,7 @@ class BigIntegerAdapter {
     printDebug('Generating a random prime of length ' + len + '.');
     let rand;
     do {
-      rand = BigIntegerAdapter.randomLen(len);
+      rand = BigIntegerAdapter.randomLen(len, true);
     } while (!rand.probPrime(iterations));
     printDebug('Prime generated.');
     return rand;
