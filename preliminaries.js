@@ -20,7 +20,7 @@ function manualTest() {
 /**
  * Runs all tests.
  * @param {int} it Iteration count
-*/
+ */
 async function testAll(it=5) {
   const secret = 'Meaning of life.';
   console.time('\nTotal runtime for tests');
@@ -32,6 +32,67 @@ async function testAll(it=5) {
   const tOPRFTest = await testT_OPRF(secret, 3, 2, it);
   const tOPRFTestLambda = await testT_OPRF(secret, 3, 2, it, true);
   console.timeEnd('\nTotal runtime for tests');
+}
+
+/**
+ * Tests the BigInteger library performance.
+ * @param {int} it Iteration count
+ */
+function testBigInt(it=500) {
+  // Divide functions into different arrays depending on function signatures
+  simpleFunctions = ['bitLen', 'probPrime', 'toString']; // no input functions
+  numFunctions = ['add', 'subtract', 'mul', 'divide', 'pow', 'eq', 'leq', 'geq', 'lesser', 'greater'];
+  modFunctions = ['mod', 'invMod', 'randomMod'];
+  nmFunctions = ['addMod', 'subtractMod', 'mulMod', 'powMod', 'eqMod']; // num and mod input functions
+  lenFunctions =['randomLen'];
+  let num = BigIntegerAdapter.randomLen(256);
+  let mod = BigIntegerAdapter.randomLen(256);
+  let len = 256;
+  for (const fun of simpleFunctions) {
+    const time = timeFunction(fun, it);
+    print(it + ' iterations of ' + fun + ' took ' + time + ' milliseconds.');
+    print('\n Average duration of a single run: ' + time/it + '.');
+  }
+  for (const fun of numFunctions) {
+    const time = timeFunction(fun, [num], it);
+    print(it + ' iterations of ' + fun + ' took ' + time + ' milliseconds.');
+    print('\n Average duration of a single run: ' + time/it + '.');
+  }
+  for (const fun of modFunctions) {
+    const time = timeFunction(fun, [mod], it);
+    print(it + ' iterations of ' + fun + ' took ' + time + ' milliseconds.');
+    print('\n Average duration of a single run: ' + time/it + '.');
+  }
+  for (const fun of nmFunctions) {
+    const time = timeFunction(fun, [num, mod], it);
+    print(it + ' iterations of ' + fun + ' took ' + time + ' milliseconds.');
+    print('\n Average duration of a single run: ' + time/it + '.');
+  }
+  for (const fun of lenFunctions) {
+    const time = timeFunction(fun, [len], it);
+    print(it + ' iterations of ' + fun + ' took ' + time + ' milliseconds.');
+    print('\n Average duration of a single run: ' + time/it + '.');
+  }
+}
+
+/**
+ * Tests a given function's performance.
+ * @param {string} fun Function name
+ * @param {array} params Function parameters
+ * @param {it} Iteration count
+ * @return {int} Total time spent executing the function
+ */
+function timeFunction(fun, params=null, it) {
+  let t0, t1;
+  let total = 0; 
+  for (let i = 1; i <= it; i++) {
+    let rand = BigIntegerAdapter.randomLen(256);
+    t0 = performance.now();
+    rand.fun(params);
+    t1 = performance.now();
+    total += t1-t0;
+  }
+  return total;
 }
 
 /**
@@ -492,24 +553,14 @@ class PrimeGroup {
 
     // Find a prime modulus
     const factLen = modLen - oLen;
-    let factor;
-    let iterations = 0;
-    let a; let b;
-    let modulus;
+    let factor, modulus;
     do {
       const t0 = performance.now()
       factor = BigIntegerAdapter.randomLen(factLen, true);
       modulus = this.order.times(factor).add(1);
-      a = !modulus.probPrime(this.stat);
-      b = modulus.bitLen() != modLen;
-      if (!a) {
-        print('Modulus is prime!: ' + iterations);
-        print(modulus.bitLen());
-      }
-      iterations++;
       const t1 = performance.now()
-      print(t1-t0 + 'milliseconds.');
-    } while (a || b);
+      print(t1-t0 + ' ms');
+    } while (modulus.bitLen() != modLen || !modulus.probPrime(this.stat));
     this.modulus = modulus;
     if (this.modulus.bitLen() != modLen) {
       throw new RangeError('Prime Modulus does not satisfy'+
@@ -770,7 +821,7 @@ class BigIntegerAdapter {
    * prime testing.
    * @return {BigIntegerAdapter} A random probable prime
    */
-  static randomPrime(len, iterations) {
+  static randomPrime(len, iterations=5) {
     printDebug('Generating a random prime of length ' + len + '.');
     let rand;
     do {
@@ -797,7 +848,7 @@ class BigIntegerAdapter {
    * @param {int} iterations Test count
    * @return {boolean} Whether value is prime
    */
-  probPrime(iterations) {
+  probPrime(iterations=5) {
     // ! This uses Math.random, which is insecure.
     return this.value.isProbablePrime(iterations);
   }
@@ -883,5 +934,5 @@ function printError(T) {
 
 // This check protects importing scripts from running main().
 if (typeof require != 'undefined' && require.main == module) {
-  manualTest();
+  testBigInt(50);
 }
