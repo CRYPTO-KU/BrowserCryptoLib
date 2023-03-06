@@ -16,7 +16,6 @@ function manualTest() {
   print('Generator: ' + G.generator.toString(16));
 }
 
-
 /**
  * Runs all tests.
  * @param {int} it Iteration count
@@ -226,7 +225,13 @@ function testGroup(it) {
 
 // --- Tests end ---
 
-// --- Secret Sharing functions ---
+
+// --- Identification Scheme ---
+
+// --- Identification Scheme end ---
+
+
+// --- Secret Sharing ---
 
 /**
  * Takes an array of indices and shares where the elements
@@ -508,7 +513,7 @@ class PrimeGroup {
       }
       iterations++;
       const t1 = performance.now()
-      print(t1-t0 + 'milliseconds.');
+      print(t1-t0 + ' milliseconds.');
     } while (a || b);
     this.modulus = modulus;
     if (this.modulus.bitLen() != modLen) {
