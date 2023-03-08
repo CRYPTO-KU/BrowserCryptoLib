@@ -39,57 +39,70 @@ async function testAll(it=5) {
  * @param {int} it Iteration count
  */
 function testBigInt(it=500) {
-  // Divide functions into different arrays depending on function signatures
+  // Divide functions into different arrays depending on parameters 
   simpleFunctions = ['bitLen', 'probPrime', 'toString']; // no input functions
-  numFunctions = ['add', 'subtract', 'mul', 'divide', 'pow', 'eq', 'leq', 'geq', 'lesser', 'greater'];
-  modFunctions = ['mod', 'invMod', 'randomMod'];
+  numFunctions = ['add', 'subtract', 'mul', 'divide','eq', 'leq', 'geq', 'lesser', 'greater']; // Not pow, it goes out of range with random numbers
+  modFunctions = ['mod', 'randomMod'] // Not invMod, coprime numbers needed
   nmFunctions = ['addMod', 'subtractMod', 'mulMod', 'powMod', 'eqMod']; // num and mod input functions
-  lenFunctions =['randomLen'];
+  lenFunctions =['randomLen', 'randomPrime'];
+
   let num = BigIntegerAdapter.randomLen(256);
   let mod = BigIntegerAdapter.randomLen(256);
   let len = 256;
   for (const fun of simpleFunctions) {
-    const time = timeFunction(fun, it);
-    print(it + ' iterations of ' + fun + ' took ' + time + ' milliseconds.');
-    print('\n Average duration of a single run: ' + time/it + '.');
+    const time = timeFunction(fun, [], it);
+    print('Testing ' + fun + '...');
+    print('\t' + it + ' iterations of ' + fun + ' took ' + time + ' milliseconds.');
+    print('\t Average duration of a single run: ' + time/it + ' milliseconds.\n');
   }
   for (const fun of numFunctions) {
+    print('Testing ' + fun + '...');
     const time = timeFunction(fun, [num], it);
-    print(it + ' iterations of ' + fun + ' took ' + time + ' milliseconds.');
-    print('\n Average duration of a single run: ' + time/it + '.');
+    print('\t' + it + ' iterations of ' + fun + ' took ' + time + ' milliseconds.');
+    print('\t Average duration of a single run: ' + time/it + ' milliseconds.\n');
   }
   for (const fun of modFunctions) {
+    print('Testing ' + fun + '...');
     const time = timeFunction(fun, [mod], it);
-    print(it + ' iterations of ' + fun + ' took ' + time + ' milliseconds.');
-    print('\n Average duration of a single run: ' + time/it + '.');
+    print('\t' + it + ' iterations of ' + fun + ' took ' + time + ' milliseconds.');
+    print('\t Average duration of a single run: ' + time/it + ' milliseconds.\n');
   }
   for (const fun of nmFunctions) {
+    print('Testing ' + fun + '...');
     const time = timeFunction(fun, [num, mod], it);
-    print(it + ' iterations of ' + fun + ' took ' + time + ' milliseconds.');
-    print('\n Average duration of a single run: ' + time/it + '.');
+    print('\t' + it + ' iterations of ' + fun + ' took ' + time + ' milliseconds.');
+    print('\t Average duration of a single run: ' + time/it + ' milliseconds.\n');
   }
   for (const fun of lenFunctions) {
+    print('Testing ' + fun + '...');
     const time = timeFunction(fun, [len], it);
-    print(it + ' iterations of ' + fun + ' took ' + time + ' milliseconds.');
-    print('\n Average duration of a single run: ' + time/it + '.');
+    print('\t' + it + ' iterations of ' + fun + ' took ' + time + ' milliseconds.');
+    print('\t Average duration of a single run: ' + time/it + ' milliseconds.\n');
   }
 }
 
 /**
  * Tests a given function's performance.
+ * TODO: Open this function to other classes' functions.
  * @param {string} fun Function name
  * @param {array} params Function parameters
  * @param {it} Iteration count
  * @return {int} Total time spent executing the function
  */
-function timeFunction(fun, params=null, it) {
+function timeFunction(fun, params, it) {
   let t0, t1;
   let total = 0; 
   for (let i = 1; i <= it; i++) {
     let rand = BigIntegerAdapter.randomLen(256);
-    t0 = performance.now();
-    rand.fun(params);
-    t1 = performance.now();
+    if(fun.startsWith('random')) { // Static methods start with 'random'
+      t0 = performance.now();
+      BigIntegerAdapter[fun](...params);
+      t1 = performance.now();
+    } else {
+      t0 = performance.now();
+      rand[fun](...params);
+      t1 = performance.now();
+    }
     total += t1-t0;
   }
   return total;
@@ -858,8 +871,8 @@ class BigIntegerAdapter {
    * @param {int} radix The base to use to represent the number
    * @return {string} A string representation of the encapsulated value
    */
-  toString(radix=10) {
-    return this.value.toString(radix);
+  toString(radix=5) {
+     return this.value.toString(radix);
   }
 }
 
