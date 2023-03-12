@@ -16,6 +16,7 @@ function manualTest() {
   print('Generator: ' + G.generator.toString(16));
 }
 
+
 /**
  * Runs all tests.
  * @param {int} it Iteration count
@@ -299,13 +300,63 @@ function testGroup(it) {
 
 // --- Tests end ---
 
+// --- Identification Scheme Functions ---
+// Schnorr scheme according to: https://asecuritysite.com/encryption/schnorr
+// I used the same notation for the variables for clarity.
 
-// --- Identification Scheme ---
+/**
+ * Generates a random exponent from the common PrimeGroup to be used as challenge.
+ * @param {PrimeGroup} group Common PrimeGroup
+ * @return {BigIntegerAdapter} c Random challenge
+ */
+function schnorrChallenge(group) {
+  const c = group.randomExponent();
+  return c;
+}
+
+/**
+ * ! Note: public key is calculated here.
+ * Generates a responds to the challenge, proving knowledge of x.
+ * Note that X = g^x is normally assumed to be known, because the
+ * public key is (g^x, group). For the sake of simplicity, it is
+ * returned here; as this has little effect on performance numbers.
+ * @param {BigIntegerAdapter} x The secret value to be proven, an
+ *  exponent in the group
+ * @param {BigIntegerAdapter} c The challenge sent by the challenger
+ * @param {PrimeGroup} group Common PrimeGroup
+ * @return {[BigIntegerAdapter, BigIntegerAdapter, BigIntegerAdapter]} [X Y z]
+ *  X = g^x the public key, Y = g^random and z = y*x^c the response.
+ */
+function schnorrResponse(x, c, group) {
+  const mod = group.modulus;
+  const g = group.generator;
+  const X = g.powMod(x, mod);
+  const y = group.randomExponent();
+  const Y = g.powMod(y, mod);
+  const z = y.mulMod(x.powMod(c, mod), mod);
+  return [X, Y, z];
+}
+
+/**
+ * Verifies that the prover has the private key corresponding to the public key X.
+ * @param {BigIntegerAdapter} X The public key
+ * @param {BigIntegerAdapter} Y First part of the response
+ * @param {BigIntegerAdapter} z Second part of the response
+ * @param {BigIntegerAdapter} c The challenge
+ * @param {PrimeGroup} group Common PrimeGroup
+ * @return {boolean} g^z == Y*X^c (in group)
+ */
+function schnorrVerify(X, Y, z, c, group) {
+  const mod = group.modulus;
+  const g = group.generator;
+  const val1 = g.powMod(z, mod);
+  const val2 = Y.mulMod(X.powMod(c, mod), mod);
+  return val1.eqMod(val2, mod);
+}
 
 // --- Identification Scheme end ---
 
-
-// --- Secret Sharing ---
+// --- Secret Sharing functions ---
 
 /**
  * Takes an array of indices and shares where the elements
@@ -537,7 +588,7 @@ async function hash(str) {
 class PrimeGroup {
   /**
    * @param {BigIntegerAdapter} modLen
-   * @param {BigIntegerAdapter} oLen
+   * @para'\t' + m {BigIntegerAdapter} oLen
    * @param {BigIntegerAdapter} stat
    * @throws {RangeError} If the generated primes do not satisfy
    * given bit length conditions. If this is thrown, there is
