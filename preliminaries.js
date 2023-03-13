@@ -35,6 +35,27 @@ async function testAll(it=5) {
 }
 
 /**
+ * Tests Schnorr Identification Scheme correctness and performance.
+ * @param {int} it Iteration count
+ * @return {boolean} true if all tests pass, false otherwise
+ */
+function testSchnorr(it=5) {
+  const G = new PrimeGroup();
+  const secret = G.randomExponent();
+  for (let i = 1; i <= it; i++) {
+    console.time('Schnorr test #' + i);
+    const c = schnorrChallenge(G);
+    let resp = schnorrResponse(secret, c, G);
+    const result =  schnorrVerify(secret[0], secret[1], secret[2], c, G);
+    console.timeEnd('Schnorr test #' + i);
+    if (result) continue;
+    printError('Schnorr test #' + i + ' failed.');
+    return false;
+  }
+  return true;
+}
+
+/**
  * Tests the BigInteger library performance.
  * @param {int} it Iteration count
  */
