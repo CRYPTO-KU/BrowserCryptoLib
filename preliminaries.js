@@ -321,6 +321,101 @@ function testGroup(it) {
 
 // --- Tests end ---
 
+
+// --- Symmetric Encryption Functions ---
+async function decrypt(message, password, iterations, salt) {
+  const dec = new TextDecoder();
+  let Crypto;
+  if (typeof require !== 'undefined' && require.main === module) {
+    Crypto = require('crypto');
+  } else {
+    Crypto = self.crypto;
+  }
+  const decrypted = await Crypto.subtle.decrypt(
+    {
+      name: "AES-CTR",
+      counter,
+      length:64
+    },
+    impKey,
+    ciphertext);
+  return dec.decode(decrypted);
+}
+
+
+/**
+ * A wrapper function for Crypto package's encryption to
+ * simplify its calling.
+ * @param {BigIntegerAdapter} message  Plaintext to be encrypted
+ * @param {string} password Taken from user to derive the encryption key
+ * @param {int} iterations PBKDF2 iteration count
+ * @param {int} saltLen PBKDF2 salt length
+ * @returns {[ArrayBuffer, Uint8Array(16), Uint8Array(saltLen)]} [ciphertext, counter, salt]
+ */
+async function encrypt(message, password, iterations, saltLen) {
+  const enc = new TextEndocer();
+  let Crypto;
+  if (typeof require !== 'undefined' && require.main === module) {
+    Crypto = require('crypto');
+  } else {
+    Crypto = self.crypto;
+  }
+  const plaintext = enc.encode(message.toString(16));
+  const [key, salt] = deriveKey(password, "SHA-256", iterations, saltLen);
+  let counter = Crypto.getRandomValues(new Uint8Array(16));
+  let ciphertext = await Crypto.subtle.encrypt(
+    {
+      name: "AES-CTR",
+      counter,
+      length: 64
+    },
+    key,
+    plaintext);
+  return [ciphertext, counter, salt];
+}
+
+async function deriveKey(password, hashFunction, iterations, saltLen) {
+  let Crypto;
+  if (typeof require !== 'undefined' && require.main === module) {
+    Crypto = require('crypto');
+  } else {
+    Crypto = self.crypto;
+  }
+  const keyMaterial = await Crypto.subtle.importKey(
+    "raw",
+    enc.encode(password),
+    "PBKDF2",
+    false,
+    ["deriveBits", "deriveKey"]);
+  const salt = Crypto.getRandomValues(new Uint8Array(saltLen));
+  const key = await Crypto.subtle.deriveKey(
+    {
+      "name": "PBKDF2",
+      salt: salt,
+      "iterations": iterations,
+      "hash": hashFunction
+    },
+    keyMaterial,
+    {"name": "AES-CTR", "length": 256},
+    true,
+    ["encrypt", "decrypt"]);
+  return [key, salt];
+}
+
+async function exportKey(key) {
+  return await Crypto.subtle.exportKey("raw", key);
+}
+
+async function importKey(exportedKey) {
+  return await Crypto.subtle.importKey(
+   "raw",
+    exportedKey,
+    "AES-CTR",
+    true,
+    ["encrypt", "decrypt"]);
+}
+/// --- Symmetric Encryption end ---
+
 // --- Identification Scheme Functions ---
 // Schnorr scheme according to: https://asecuritysite.com/encryption/schnorr
 // I used the same notation for the variables for clarity.
@@ -956,6 +1051,17 @@ class BigIntegerAdapter {
 // --- Classes end ---
 
 // --- Some helpful functions ---
+function importCrypto() {
+  // TODO: Test if this works
+  let Crypto;
+  if (typeof require !== 'undefined' && require.main === module) {
+    Crypto = require('crypto');
+  } else {
+    Crypto = self.crypto;
+  }
+  return Crypto;
+}
+
 
 /**
  * Transforms a Buffer into BufferArray.
