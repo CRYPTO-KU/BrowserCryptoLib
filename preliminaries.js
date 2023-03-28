@@ -323,7 +323,7 @@ function testGroup(it) {
 
 
 // --- Symmetric Encryption Functions ---
-async function decrypt(message, password, iterations, salt) {
+async function decrypt(ciphertext, password, hashFunction, iterations, salt, counter) {
   const dec = new TextDecoder();
   let Crypto;
   if (typeof require !== 'undefined' && require.main === module) {
@@ -331,13 +331,14 @@ async function decrypt(message, password, iterations, salt) {
   } else {
     Crypto = self.crypto;
   }
+  const key = deriveKey(password, hashFunction, iterations, salt);
   const decrypted = await Crypto.subtle.decrypt(
     {
       name: "AES-CTR",
       counter,
       length:64
     },
-    impKey,
+    key,
     ciphertext);
   return dec.decode(decrypted);
 }
@@ -352,8 +353,8 @@ async function decrypt(message, password, iterations, salt) {
  * @param {int} saltLen PBKDF2 salt length
  * @returns {[ArrayBuffer, Uint8Array(16), Uint8Array(saltLen)]} [ciphertext, counter, salt]
  */
-async function encrypt(message, password, iterations, saltLen) {
-  const enc = new TextEndocer();
+async function encrypt(message, password, hashFunction, iterations, saltLen) {
+  //TODO: Safety check for inputs
   let Crypto;
   if (typeof require !== 'undefined' && require.main === module) {
     Crypto = require('crypto');
@@ -361,7 +362,8 @@ async function encrypt(message, password, iterations, saltLen) {
     Crypto = self.crypto;
   }
   const plaintext = enc.encode(message.toString(16));
-  const [key, salt] = deriveKey(password, "SHA-256", iterations, saltLen);
+  const salt = Crypto.getRandomValues(new Uint8Array(saltLen));
+  const key  = await deriveKey(password, hashFunction, iterations, salt);
   let counter = Crypto.getRandomValues(new Uint8Array(16));
   let ciphertext = await Crypto.subtle.encrypt(
     {
@@ -374,7 +376,8 @@ async function encrypt(message, password, iterations, saltLen) {
   return [ciphertext, counter, salt];
 }
 
-async function deriveKey(password, hashFunction, iterations, saltLen) {
+async function deriveKey(password, hashFunction, iterations, salt) {
+  const enc = new TextEncoder();
   let Crypto;
   if (typeof require !== 'undefined' && require.main === module) {
     Crypto = require('crypto');
@@ -387,7 +390,7 @@ async function deriveKey(password, hashFunction, iterations, saltLen) {
     "PBKDF2",
     false,
     ["deriveBits", "deriveKey"]);
-  const salt = Crypto.getRandomValues(new Uint8Array(saltLen));
+  
   const key = await Crypto.subtle.deriveKey(
     {
       "name": "PBKDF2",
@@ -399,7 +402,7 @@ async function deriveKey(password, hashFunction, iterations, saltLen) {
     {"name": "AES-CTR", "length": 256},
     true,
     ["encrypt", "decrypt"]);
-  return [key, salt];
+  return key;
 }
 
 async function exportKey(key) {
