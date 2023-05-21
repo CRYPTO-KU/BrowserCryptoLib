@@ -481,7 +481,7 @@ function schnorrVerify(X, Y, z, c, group) {
 // --- Secret Sharing functions ---
 // TODO: Get the PrimeGroup comments into consistency
 /**
- * Generate shares from a secret according to Compartmanted
+ * Generates shares from a secret according to Compartmanted
  * Secret Sharing as presented in INSERT LINK HERE
  * Each compartment (bucket) has a threshold of its own,
  * allowing for an access control mechanism.
@@ -489,7 +489,7 @@ function schnorrVerify(X, Y, z, c, group) {
  * @param {[int]} bucketSizes Sizes of each compartment
  * @param {[int]} bucketThresholds Thresholds of each compartment
  * @param {PrimeGroup} group The group in which the operations are done
- * @return {[[BigIntegerAdapter]]} Each element corresponds to the shares
+ * @return {[[(int, BigIntegerAdapter)]]} Each element corresponds to the shares
  * of compartment i. Element j of compartment i should get the share
  * shares[i][j].
  */
@@ -515,6 +515,28 @@ function compartmantedGenShares(secret, bucketSizes, bucketThresholds, group) {
 }
 
 /**
+ * TODO: Pre-calculation of lambdas
+ * TODO: Calculation in the exponent
+ * Combines shares to reveal a secret according to Compartmanted
+ * Secret Sharing as presented in INSERT LINK HERE.
+ * Does not check for the correctness of shares. If the shares
+ * are input incorrectly, generates a wrong output.
+ * @param {[[(int, BigIntegerAdapter)]]} shares An array, i^th element of whose
+ * consists of the shares of comparmartment i.
+ * @param {PrimeGroup} group The group in which the operations are done 
+ * @returns {BigIntegerAdapter} The reconstructed secret
+ */
+function compartmantedCombineShares(shares, group) {
+  const bucketCount = shares.length;
+  var secret = new BigIntegerAdapter(0);
+  for (let i = 0; i < bucketCount; i++) {
+    const bucketSecret = shamirCombineShares(shares[i], group);
+    secret = secret.addMod(bucketSecret, group.modulus);
+  }
+  return secret;
+}
+
+/**
  * Takes an array of indices and shares where the elements
  * are in the form [k, share #k]. Uses Lagrange interpolation
  * to combine the shares and returns the secret as a BigInteger.
@@ -525,13 +547,15 @@ function compartmantedGenShares(secret, bucketSizes, bucketThresholds, group) {
  * precomputed, i.e., shares[i] = [x_i, y_i, lambda_i]. Otherwise
  * pass each share as tuples, i.e., shares[i] = [x_i, y_i].
  *
- * @param {[BigIntegerAdapter]} shares: A vector of shares where each share is
- * of the form [int, BigIntegerAdapter, BigIntegerAdapter?]
+ * @param {[(int, BigIntegerAdapter)]} shares: A vector of shares 
+ * where each share is of the form [int, BigIntegerAdapter, BigIntegerAdapter?],
+ * corresponding to [shareIndex, shareValue, shareLambda]. shareLambda
+ * is only input when lambdas are pre-calculated.
  * @param {PrimeGroup} group: A PrimeGroup object determining the
  * modulus of operations
  * @param {boolean} exponent: A boolean determining whether the
  * interpolation will be done on the exponents
- * @return {BigIntegerAdapter} Reconstructed secret
+ * @return {BigIntegerAdapter} The reconstructed secret
  */
 function shamirCombineShares(shares, group, exponent=false) {
   const n = shares.length;
@@ -556,8 +580,8 @@ function shamirCombineShares(shares, group, exponent=false) {
  * @param {int} t Threhsold
  * @param {PrimeGroup} group A PrimeGroup object determining the
  * modulus of operations
- * @return {[BigIntegerAdapter]} The shares that uniquely determine the
- * secret
+ * @return {[(int, BigIntegerAdapter)]} The shares that uniquely determine the
+ * secret. Each share is a tuple of (int, BigIntegerAdapter)
  */
 function shamirGenShares(secret, n, t, group) {
   if (typeof secret == 'string') {
