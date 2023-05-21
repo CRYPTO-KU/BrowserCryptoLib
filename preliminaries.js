@@ -1,4 +1,7 @@
 /* eslint-disable camelcase */
+
+const { assert } = require('console');
+
 // ! Keep the below false for release. They print out secret values.
 const DEBUG = false;
 const VERBOSE = false;
@@ -476,6 +479,40 @@ function schnorrVerify(X, Y, z, c, group) {
 // --- Identification Scheme end ---
 
 // --- Secret Sharing functions ---
+// TODO: Get the PrimeGroup comments into consistency
+/**
+ * Generate shares from a secret according to Compartmanted
+ * Secret Sharing as presented in INSERT LINK HERE
+ * Each compartment (bucket) has a threshold of its own,
+ * allowing for an access control mechanism.
+ * @param {BigIntegerAdapter} secret Secret to divide into shares
+ * @param {[int]} bucketSizes Sizes of each compartment
+ * @param {[int]} bucketThresholds Thresholds of each compartment
+ * @param {PrimeGroup} group The group in which the operations are done
+ * @return {[[BigIntegerAdapter]]} Each element corresponds to the shares
+ * of compartment i. Element j of compartment i should get the share
+ * shares[i][j].
+ */
+function compartmantedGenShares(secret, bucketSizes, bucketThresholds, group) {
+  if (bucketSizes.length != bucketThresholds.length) {
+    printError('bucketSizes and bucketThresholds sizes do not match.');
+    return [];
+  }
+  const bucketCount = bucketSizes.length;
+  const bucketSecrets = [];
+  let total = new BigIntegerAdapter(0);
+  for (let i = 1; i < bucketCount; i++) {
+    const randomElement = group.randomElement();
+    total.addMod(randomElement, group.modulus);
+    bucketSecrets.push(randomElement);
+  }
+  bucketSecrets.push(secret.subtractMod(total, group.modulus)); // Sum of bucketSecrets = secret
+  const shares = [];
+  for (let i = 0; i < bucketCount; i++) {
+    shares.push[shamirGenShares(bucketSecrets[i], bucketSizes[i], bucketThresholds[i], group)];
+  }
+  return shares;
+}
 
 /**
  * Takes an array of indices and shares where the elements
@@ -514,7 +551,7 @@ function shamirCombineShares(shares, group, exponent=false) {
 
 /**
  * Generate shares from a secret according to Shamir's Secret Sharing
- * @param {string} secret Secret to divide into shares
+ * @param {string | BigIntegerAdapter} secret Secret to divide into shares
  * @param {int} n Share count
  * @param {int} t Threhsold
  * @param {PrimeGroup} group A PrimeGroup object determining the
@@ -523,7 +560,10 @@ function shamirCombineShares(shares, group, exponent=false) {
  * secret
  */
 function shamirGenShares(secret, n, t, group) {
-  const pnomial = genPol(new BigIntegerAdapter(secret), t, group);
+  if (typeof secret == 'string') {
+    secret = new BigIntegerAdapter(secret);
+  }
+  const pnomial = genPol(secret, t, group);
   const shares = [];
   for (let i = 1; i <= n; i++) {
     shares.push([i, evalPol(pnomial, i, group)]);
@@ -765,6 +805,13 @@ class PrimeGroup {
     }
     this.generator = gen;
   }
+
+  /**
+   * Returns a random BigIntegerAdapter element.
+   */
+  randomElement() {
+    return this.generator.powMod(BigIntegerAdapter.randomMod(this.order), this.modulus);
+  }
 }
 
 /**
@@ -905,7 +952,7 @@ class BigIntegerAdapter {
     return this.add(num).mod(mod);
   }
   /**
-   * Performs modular subtraction.
+   * Performs modular subtraction. Always returns a positive number.
    * @param {int | BigIntegerAdapter} num Number to subtract
    * @param {int | BigIntegerAdapter} mod Modulus
    * @return {BigIntegerAdapter} value - num (mod mod)
@@ -1133,5 +1180,5 @@ function printError(T) {
 
 // This check protects importing scripts from running main().
 if (typeof require != 'undefined' && require.main == module) {
-  testBigInt(50);
+  manuelTest();
 }
