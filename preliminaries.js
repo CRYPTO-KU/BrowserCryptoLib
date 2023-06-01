@@ -4,18 +4,14 @@
 const DEBUG = false;
 const VERBOSE = false;
 iterations = 0;
+// TODO: Exceptions and handling
+// TODO: Maintain older functions, there are likely a ton of broken code
+
 // --- TESTS ---
 // TODO: Write proper tests.
-// TODO: Maintain older functions, there are likely a ton of broken code
 // eslint-disable-next-line require-jsdoc
-function manualTest() {
-  console.time('Random PrimeGroup Generation');
-  const G = new PrimeGroup(2048, 256, 1);
-  console.timeEnd('Random PrimeGroup Generation');
-  print('New PrimeGroup generated.');
-  print('Modulus: ' + G.modulus.toString(16));
-  print('Order: ' + G.order.toString(16));
-  print('Generator: ' + G.generator.toString(16));
+function main() {
+  testTOPRF('Burcunun sifresi', 5, 3, 10, true);
 }
 
 
@@ -141,7 +137,8 @@ function timeFunction(fun, params, it) {
  * @param {boolean} lambdas Whether the lambdas are precalculated by servers
  * @return {Promise<boolean>} Whether the tests are successful
  */
-async function testT_OPRF(secret, n, t, it, lambdas=false) {
+async function testTOPRF(secret, n, t, it, lambdas=false) {
+  // TODO: Lambda precalculation should be 'pre' calculation...
   const G = new PrimeGroup();
   console.time('t-OPRF tests with'+
     (lambdas ? '' : 'out')+
@@ -167,6 +164,8 @@ async function testT_OPRF(secret, n, t, it, lambdas=false) {
       if (lambdas) beta_i.push(calculateLambda(i, keys.length, G.order));
       betas.push(beta_i);
     }
+    print("HERE 3:")
+    print(betas);
     const resp = await oprfResponse(betas, ro, G);
     const check = result.eqMod(resp, G.modulus);
     console.timeEnd('t-OPRF test #' + i + ': n=' + n*i + ', t=' + t*i);
@@ -296,35 +295,20 @@ function testPolynomials(it) {
 }
 
 /**
- * TODO: This isn't useful in its current state. Time each function individually.
- * Tests group operations.
- * @param {int} it Iteration count
- * @return {boolean} Whether the tests are successful
+ * TODO: Time each group function individually.
+ * Tests group generation.
  */
-function testGroup(it) {
+function testGroup() {
+  console.time('Random PrimeGroup Generation');
   const G = new PrimeGroup();
-  console.time('Group tests');
-  for (let i = 1; i <= it; i++) {
-    console.time('Group test #'+i);
-    const x = G.randomElement();
-    const x_inv = x.invMod(G.modulus);
-    const e = x.mulMod(x_inv, G.modulus);
-    console.timeEnd('Group test #'+i);
-    const check = e == 1;
-    if (check) continue;
-    printError('Inversion failed. e: ' + e.toString());
-    printError('Random x: ' + x.toString());
-    printError('Calculated x inverse: ' + x_inv.toString());
-    console.timeEnd('Group tests');
-    return false;
-  }
-  console.timeEnd('Group tests');
-  return true;
+  console.timeEnd('Random PrimeGroup Generation');
+  print('New PrimeGroup generated.');
+  print('Modulus: ' + G.modulus.toString(16));
+  print('Order: ' + G.order.toString(16));
+  print('Generator: ' + G.generator.toString(16));
 }
 
 // --- Tests end ---
-
-
 // --- Symmetric Encryption Functions ---
 // TODO: Test these functions
 /**
@@ -420,7 +404,6 @@ async function importKey(exportedKey) {
     ["encrypt", "decrypt"]);
 }
 /// --- Symmetric Encryption end ---
-
 // --- Identification Scheme Functions ---
 // Schnorr scheme according to: https://asecuritysite.com/encryption/schnorr
 // I used the same notation for the variables for clarity.
@@ -474,9 +457,7 @@ function schnorrVerify(X, Y, z, c, group) {
   const val2 = Y.mulMod(X.powMod(c, mod), mod);
   return val1.eqMod(val2, mod);
 }
-
 // --- Identification Scheme end ---
-
 // --- Secret Sharing functions ---
 /**
  * Generates shares from a secret according to Compartmanted
@@ -513,8 +494,6 @@ function compartmantedGenShares(secret, bucketSizes, bucketThresholds, group) {
 }
 
 /**
- * TODO: Pre-calculation of lambdas
- * TODO: Calculation in the exponent
  * Combines shares to reveal a secret according to Compartmanted
  * Secret Sharing as presented in INSERT LINK HERE.
  * Does not check for the correctness of shares. If the shares
@@ -564,6 +543,8 @@ function shamirCombineShares(shares, group, exponent=false) {
     const i = point[0]; // int, not bigInt
     const at_i = point[1];
     const lambda_i = lambdas ? point[2] : calculateLambda(i, n, ord);
+    print("HERE: ")
+    print(point[2].toString())
     if (exponent) at_0 = at_0.mulMod(at_i.powMod(lambda_i, mod), mod);
     else at_0 = at_0.addMod(at_i.mulMod(lambda_i, ord), ord);
   }
@@ -611,7 +592,7 @@ function calculateLambda(i, n, order) {
 
 /**
  * Constructs a degree t-1 semi-random polynomial.
- * All coefficients are BigIntegerAdapter objects.
+ * All coefficients are exponents in the given group.
  * @param {BigIntegerAdapter} secret Secret to divide into shares
  * @param {int} t Threhsold
  * @param {PrimeGroup} group The group in which the operations are done 
@@ -646,9 +627,7 @@ function evalPol(pol, x, group) {
   return sum;
 }
 // --- Secret Sharing end ---
-
 // --- OPRF functions ---
-
 /**
  * Calculates beta^(ro^-1) = alpha^(k*(ro^-1)) = Hp_x^(ro*k*(ro^-1)) = Hp_x^k
  * If using t-OPRF, pass betas as an array. Otherwise pass a BigIntegerAdapter.
@@ -707,7 +686,6 @@ async function oprfMask(secret, group) {
   return [ro, Hp_xToRo];
 }
 // --- OPRF end ---
-
 // --- Hash functions ---
 /**
  * Hashes a string to an element in the given group.
@@ -742,11 +720,10 @@ async function hash(str) {
   hash = Buffer.from(hash).toString('hex');
   // Converstion to string may reduce size only when there
   //  are 0s on the left side
-  while (hp.length < 32) hp = '0' + hp;
+  while (hash.length < 32) hash = '0' + hash;
   return hash;
 }
 // --- Hash end ---
-
 // --- Classes ---
 /**
  * A PrimeGroup class representing a group of prime order
@@ -756,7 +733,7 @@ async function hash(str) {
 class PrimeGroup {
   /**
    * @param {BigIntegerAdapter} modLen
-   * @para'\t' + m {BigIntegerAdapter} oLen
+   * @param {BigIntegerAdapter} oLen
    * @param {BigIntegerAdapter} stat
    * @throws {RangeError} If the generated primes do not satisfy
    * given bit length conditions. If this is thrown, there is
@@ -765,6 +742,33 @@ class PrimeGroup {
    */
   constructor(modLen, oLen, stat) {
     // Check preconditions
+    if(!modLen) {
+      // Precalculated PrimeGroup
+      printDebug('Generating PrimeGroup with default values because no'+
+      ' parameters were passed while calling the constructor.');
+      this.modulus = new BigIntegerAdapter('b711fc4246f321077b5bc68005c4'+
+      'a3d0f4c4c9451c2399b09966dda4321f8126bda76eb228862ac1e2a97abf66e17'+
+      'b807cef65eaa32ecb0cacb3e735d9eb3f34cc789a2816c05e3c5a05ff7dd7209b'+
+      '7f3790f9af5e2888c7efb22d83ebb9d384496f469973f9dd4b666aabecfec5ba4'+
+      'c94d6942fff51e243d833e58146042f9aae4ea44d7df227133d25e2a995d4816f'+
+      '8488d3b5855698f9b457900b7b96295c5b5a358192d0aa29b90c05f2658e343e3'+
+      'c41bbdf879fa6bf310a48084295c0d2af5bc1f722546f6631c18ba656a11a4187'+
+      'eeaeb32b6a4ba6569c039853635f1e854507c99153caa16394b5a477c1ff40817'+
+      '81ab7522030ce900974543a621f9f', 16);
+      this.order = new BigIntegerAdapter('bfaa6a98c30984b4817b9d56ade59a'+
+      '645de2598fd8b566f9de083eb014964b27', 16);
+      this.generator = new BigIntegerAdapter('2b0dfcdd512e038eb3b92c1fcb'+
+      'e099a2bbd9ef2777756c4e90c4667d6f688c9284c898d0850b5c061659529d790'+
+      '2aeeadc3922e59beba98642fde4105eb6f2642dde8a3a2d0bdaf139b57c22f52f'+
+      '717f3c4667152f9ed1c29bff5baca42d247af3d27f0a7bb8a852c92278d738e9f'+
+      '65d13213448d02d073ba0aa7c228c1aadd843f00e30e8bb511a9fde82ca599629'+
+      'fafeaeca2577909816f7a3a7a2e5455f449ad0a47165ae0e8ae2deddb9f1c6288'+
+      '15d66f25d0b9c1ae1a202557d83488b6a118f38c3121374d2d6664976b591b69e'+
+      'c19103b8106082c75d4e3bf7975fa5810c47d0bdbd0510adc8084da400e7746b6'+
+      '832f2bf054d17b4858bd3839a644594', 16);
+      return;
+    }
+
     if (modLen < 512) {
       printError('Tried to create a group with modulus length < 512');
       modLen = 512;
@@ -796,7 +800,7 @@ class PrimeGroup {
       factor = BigIntegerAdapter.randomLen(factLen, true);
       modulus = this.order.times(factor).add(1);
       const t1 = performance.now()
-      print(t1-t0 + ' ms');
+      printDebug('Generated potential modulus: ' + t1-t0 + ' ms');
     } while (modulus.bitLen() != modLen || !modulus.probPrime(this.stat));
     this.modulus = modulus;
     if (this.modulus.bitLen() != modLen) {
@@ -820,6 +824,13 @@ class PrimeGroup {
    */
   randomElement() {
     return this.generator.powMod(BigIntegerAdapter.randomMod(this.order), this.modulus);
+  }
+
+  /**
+   * Returns a random BigInteger exponent.
+   */
+  randomExponent() {
+    return BigIntegerAdapter.randomMod(this.order);
   }
 }
 
@@ -1101,9 +1112,7 @@ class BigIntegerAdapter {
      return this.value.toString(radix);
   }
 }
-
 // --- Classes end ---
-
 // --- Some helpful functions ---
 function importCrypto() {
   let Crypto;
@@ -1114,8 +1123,6 @@ function importCrypto() {
   }
   return Crypto;
 }
-
-
 /**
  * Transforms a Buffer into BufferArray.
  * @param {Buffer} buf A Buffer holding any data
@@ -1176,10 +1183,9 @@ function printVerbose(T) {
 function printError(T) {
   console.log('%c' + T, 'color: red');
 }
-
 // --- Helpful functions end ---
 
 // This check protects importing scripts from running main().
 if (typeof require != 'undefined' && require.main == module) {
-  manualTest();
+  main();
 }

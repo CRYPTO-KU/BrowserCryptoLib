@@ -1,0 +1,9 @@
+The following functionality exists:
+	PrimeGroup
+	Polynomials
+	Shamir
+	OPRF
+	
+
+Does not work:
+	t-OPRF
