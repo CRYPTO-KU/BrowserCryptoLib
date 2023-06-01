@@ -1,18 +1,17 @@
 /* eslint-disable camelcase */
-
-const { assert } = require('console');
-
 // ! Keep the below false for release. They print out secret values.
+// * Note: DEBUG and VERBOSE options may slightly reduce performance.
 const DEBUG = false;
 const VERBOSE = false;
 iterations = 0;
 // --- TESTS ---
-
+// TODO: Write proper tests.
+// TODO: Maintain older functions, there are likely a ton of broken code
 // eslint-disable-next-line require-jsdoc
 function manualTest() {
-  console.time('Random Prime Generation');
+  console.time('Random PrimeGroup Generation');
   const G = new PrimeGroup(2048, 256, 1);
-  console.timeEnd('Random Prime Generation');
+  console.timeEnd('Random PrimeGroup Generation');
   print('New PrimeGroup generated.');
   print('Modulus: ' + G.modulus.toString(16));
   print('Order: ' + G.order.toString(16));
@@ -25,6 +24,7 @@ function manualTest() {
  * @param {int} it Iteration count
  */
 async function testAll(it=5) {
+  // TODO: Add all tests here. Scrap that, add all tests to a separate file
   const secret = 'Meaning of life.';
   console.time('\nTotal runtime for tests');
   const groupTest = testGroup(it);
@@ -142,13 +142,12 @@ function timeFunction(fun, params, it) {
  * @return {Promise<boolean>} Whether the tests are successful
  */
 async function testT_OPRF(secret, n, t, it, lambdas=false) {
-  // TODO: Make sure the time starts on consistent lines
   const G = new PrimeGroup();
-  let Hp_x = await hashPrime(secret, G);
-  Hp_x = new BigIntegerAdapter(Hp_x, 16);
   console.time('t-OPRF tests with'+
     (lambdas ? '' : 'out')+
     ' lambdas pre-calculated');
+  let Hp_x = await hashPrime(secret, G);
+  Hp_x = new BigIntegerAdapter(Hp_x, 16);
   for (let i = 1; i <= it; i++) {
     console.time('t-OPRF test #' + i + ': n=' + n*i + ', t=' + t*i);
     const key = G.randomExponent();
@@ -169,8 +168,8 @@ async function testT_OPRF(secret, n, t, it, lambdas=false) {
       betas.push(beta_i);
     }
     const resp = await oprfResponse(betas, ro, G);
-    console.timeEnd('t-OPRF test #' + i + ': n=' + n*i + ', t=' + t*i);
     const check = result.eqMod(resp, G.modulus);
+    console.timeEnd('t-OPRF test #' + i + ': n=' + n*i + ', t=' + t*i);
     if (check) continue;
     printError('t-OPRFtests failed at n=' + n*i + ', t=' + t*i);
     printError('Result:\n' + result.toString());
@@ -204,15 +203,14 @@ async function testOPRF(secret) {
   const beta = await oprfChallenge(alpha, key, G);
   const resp = await oprfResponse(beta, ro, G);
   const check = result.eqMod(resp, G.modulus);
-
-  printVerbose(`key: ${key.toString()} \n`, color='orange');
-  printVerbose(`result: ${result.toString()} \n`, color='orange');
-  printVerbose(`ro: ${ro.toString()} \n`, color='orange');
-  printVerbose(`alpha: ${alpha.toString()} \n`, color='orange');
-  printVerbose(`beta: ${beta.toString()} \n`, color='orange');
-  printVerbose(`resp: ${resp.toString()} \n`, color='orange');
-
   console.timeEnd('OPRF test');
+
+  printVerbose(`key: ${key.toString()} \n`);
+  printVerbose(`result: ${result.toString()} \n`);
+  printVerbose(`ro: ${ro.toString()} \n`);
+  printVerbose(`alpha: ${alpha.toString()} \n`);
+  printVerbose(`beta: ${beta.toString()} \n`);
+  printVerbose(`resp: ${resp.toString()} \n`);
   return check;
 }
 
@@ -259,12 +257,12 @@ function testShamir(n, t, it, exponent=false) {
     const check = exponent ?
       secret_elm.eqMod(recons, modulus) : secret.eqMod(recons, order);
     if (check) continue;
+	console.timeEnd('Shamir tests');
     printError('Shamir\'s Secret Sharing tests on '+
       (exponent ? 'exponent' : 'base')+
       ' failed at n=' + n*i + ', t=' + t*i);
     printError('Secret:\n' + secret.toString());
     printError('Recons:\n' + recons.toString());
-    console.timeEnd('Shamir tests');
     return false;
   }
   console.timeEnd('Shamir tests');
@@ -272,6 +270,7 @@ function testShamir(n, t, it, exponent=false) {
 }
 
 /**
+ * TODO: This isn't useful in its current state. Time each function individually.
  * Tests polynomial operations.
  * @param {int} it Iteration count
  * @return {boolean} Whether the tests are successful
@@ -297,6 +296,7 @@ function testPolynomials(it) {
 }
 
 /**
+ * TODO: This isn't useful in its current state. Time each function individually.
  * Tests group operations.
  * @param {int} it Iteration count
  * @return {boolean} Whether the tests are successful
@@ -326,14 +326,21 @@ function testGroup(it) {
 
 
 // --- Symmetric Encryption Functions ---
+// TODO: Test these functions
+/**
+ * A wrapper function for Crypto package's decryption to
+ * simplify its use.
+ * @param {ArrayBuffer} ciphertext
+ * @param {string} password User input to derive the decryption key
+ * @param {string} hashFunction Used for key derivation (PBKDF2)
+ * @param {int} iterations Used for key derivation (PBKDF2)
+ * @param {Uint8Array} salt Used for key derivation (PBKDF2)
+ * @param {Uint8Array(16)} counter
+ * @return 
+ */
 async function decrypt(ciphertext, password, hashFunction, iterations, salt, counter) {
   const dec = new TextDecoder();
-  let Crypto;
-  if (typeof require !== 'undefined' && require.main === module) {
-    Crypto = require('crypto');
-  } else {
-    Crypto = self.crypto;
-  }
+  const Crypto = importCrypto();
   const key = deriveKey(password, hashFunction, iterations, salt);
   const decrypted = await Crypto.subtle.decrypt(
     {
@@ -343,30 +350,27 @@ async function decrypt(ciphertext, password, hashFunction, iterations, salt, cou
     },
     key,
     ciphertext);
-  return dec.decode(decrypted);
+  return dec.decode(decrypted); //? This may be wrong
 }
-
 
 /**
  * A wrapper function for Crypto package's encryption to
- * simplify its calling.
- * @param {BigIntegerAdapter} message  Plaintext to be encrypted
- * @param {string} password Taken from user to derive the encryption key
- * @param {int} iterations PBKDF2 iteration count
- * @param {int} saltLen PBKDF2 salt length
- * @returns {[ArrayBuffer, Uint8Array(16), Uint8Array(saltLen)]} [ciphertext, counter, salt]
+ * simplify its use. CTR and CBC modes are non-authenticated
+ * encryption schemes, whereas GCM mode includes authentication.
+ * TODO: Let caller choose encryption and hash functions.
+ * @param {BigIntegerAdapter} message  Original plaintext
+ * @param {string} password User input to derive the encryption key
+ * @param {string} hashFunction Used for key derivation (PBKDF2)
+ * @param {int} iterations Used for key derivation (PBKDF2)
+ * @param {int} saltLen Used for key derivation (PBKDF2)
+ * @return {[ArrayBuffer, Uint8Array(16), Uint8Array(saltLen)]} [ciphertext, counter, salt]
  */
 async function encrypt(message, password, hashFunction, iterations, saltLen) {
-  //TODO: Safety check for inputs
-  let Crypto;
-  if (typeof require !== 'undefined' && require.main === module) {
-    Crypto = require('crypto');
-  } else {
-    Crypto = self.crypto;
-  }
+  const enc = new TextEncoder();
+  const Crypto = importCrypto();
   const plaintext = enc.encode(message.toString(16));
   const salt = Crypto.getRandomValues(new Uint8Array(saltLen));
-  const key  = await deriveKey(password, hashFunction, iterations, salt);
+  const key  = await deriveKey(enc.encode(password), hashFunction, iterations, salt);
   let counter = Crypto.getRandomValues(new Uint8Array(16));
   let ciphertext = await Crypto.subtle.encrypt(
     {
@@ -379,21 +383,14 @@ async function encrypt(message, password, hashFunction, iterations, saltLen) {
   return [ciphertext, counter, salt];
 }
 
-async function deriveKey(password, hashFunction, iterations, salt) {
-  const enc = new TextEncoder();
-  let Crypto;
-  if (typeof require !== 'undefined' && require.main === module) {
-    Crypto = require('crypto');
-  } else {
-    Crypto = self.crypto;
-  }
+async function deriveKey(encodedPw, hashFunction, iterations, salt) {
+  const Crypto = importCrypto();
   const keyMaterial = await Crypto.subtle.importKey(
     "raw",
-    enc.encode(password),
+    encodedPw,
     "PBKDF2",
     false,
     ["deriveBits", "deriveKey"]);
-  
   const key = await Crypto.subtle.deriveKey(
     {
       "name": "PBKDF2",
@@ -409,10 +406,12 @@ async function deriveKey(password, hashFunction, iterations, salt) {
 }
 
 async function exportKey(key) {
+  const Crypto = importCrypto();
   return await Crypto.subtle.exportKey("raw", key);
 }
 
 async function importKey(exportedKey) {
+  const Crypto = importCrypto();
   return await Crypto.subtle.importKey(
    "raw",
     exportedKey,
@@ -428,7 +427,7 @@ async function importKey(exportedKey) {
 
 /**
  * Generates a random exponent from the common PrimeGroup to be used as challenge.
- * @param {PrimeGroup} group Common PrimeGroup
+ * @param {PrimeGroup} group The group in which the operations are done 
  * @return {BigIntegerAdapter} c Random challenge
  */
 function schnorrChallenge(group) {
@@ -445,7 +444,7 @@ function schnorrChallenge(group) {
  * @param {BigIntegerAdapter} x The secret value to be proven, an
  *  exponent in the group
  * @param {BigIntegerAdapter} c The challenge sent by the challenger
- * @param {PrimeGroup} group Common PrimeGroup
+ * @param {PrimeGroup} group The group in which the operations are done 
  * @return {[BigIntegerAdapter, BigIntegerAdapter, BigIntegerAdapter]} [X Y z]
  *  X = g^x the public key, Y = g^random and z = y*x^c the response.
  */
@@ -465,7 +464,7 @@ function schnorrResponse(x, c, group) {
  * @param {BigIntegerAdapter} Y First part of the response
  * @param {BigIntegerAdapter} z Second part of the response
  * @param {BigIntegerAdapter} c The challenge
- * @param {PrimeGroup} group Common PrimeGroup
+ * @param {PrimeGroup} group The group in which the operations are done 
  * @return {boolean} g^z == Y*X^c (in group)
  */
 function schnorrVerify(X, Y, z, c, group) {
@@ -479,7 +478,6 @@ function schnorrVerify(X, Y, z, c, group) {
 // --- Identification Scheme end ---
 
 // --- Secret Sharing functions ---
-// TODO: Get the PrimeGroup comments into consistency
 /**
  * Generates shares from a secret according to Compartmanted
  * Secret Sharing as presented in INSERT LINK HERE
@@ -547,13 +545,12 @@ function compartmantedCombineShares(shares, group) {
  * precomputed, i.e., shares[i] = [x_i, y_i, lambda_i]. Otherwise
  * pass each share as tuples, i.e., shares[i] = [x_i, y_i].
  *
- * @param {[(int, BigIntegerAdapter)]} shares: A vector of shares 
+ * @param {[(int, BigIntegerAdapter)]} shares A vector of shares 
  * where each share is of the form [int, BigIntegerAdapter, BigIntegerAdapter?],
  * corresponding to [shareIndex, shareValue, shareLambda]. shareLambda
  * is only input when lambdas are pre-calculated.
- * @param {PrimeGroup} group: A PrimeGroup object determining the
- * modulus of operations
- * @param {boolean} exponent: A boolean determining whether the
+ * @param {PrimeGroup} group The group in which the operations are done 
+ * @param {boolean} exponent A boolean determining whether the
  * interpolation will be done on the exponents
  * @return {BigIntegerAdapter} The reconstructed secret
  */
@@ -578,8 +575,7 @@ function shamirCombineShares(shares, group, exponent=false) {
  * @param {string | BigIntegerAdapter} secret Secret to divide into shares
  * @param {int} n Share count
  * @param {int} t Threhsold
- * @param {PrimeGroup} group A PrimeGroup object determining the
- * modulus of operations
+ * @param {PrimeGroup} group The group in which the operations are done 
  * @return {[(int, BigIntegerAdapter)]} The shares that uniquely determine the
  * secret. Each share is a tuple of (int, BigIntegerAdapter)
  */
@@ -618,8 +614,7 @@ function calculateLambda(i, n, order) {
  * All coefficients are BigIntegerAdapter objects.
  * @param {BigIntegerAdapter} secret Secret to divide into shares
  * @param {int} t Threhsold
- * @param {PrimeGroup} group A PrimeGroup object determining the
- * modulus of operations
+ * @param {PrimeGroup} group The group in which the operations are done 
  * @return {[BigIntegerAdapter]} An array of polynomial coefficients,
  * representing a polynomial of degree t-1 with a_0 = secret,
  * a_i = random for all 0<i<t.
@@ -637,8 +632,7 @@ function genPol(secret, t, group) {
  * Evaluates a polynomial at a point in a group.
  * @param {[BigIntegerAdapter]} pol An array representing a polynomial
  * @param {int} x A point on which to evaluate the polynomial
- * @param {PrimeGroup} group A PrimeGroup object determining the
- * modulus of operations
+ * @param {PrimeGroup} group The group in which the operations are done 
  * @return {BigIntegerAdapter} The polynomial evaluated at x
  */
 function evalPol(pol, x, group) {
@@ -662,8 +656,7 @@ function evalPol(pol, x, group) {
  * or an array of betas (on t-OPRF).
  * @param {BigIntegerAdapter} ro The random number previously calculated
  * using oprfMask()
- * @param {PrimeGroup} group A PrimeGroup object determining the
- * modulus of operations
+ * @param {PrimeGroup} group The group in which the operations are done 
  * @return {Promise<BigIntegerAdapter>} The output of OPRF: Hp_x^k
  */
 async function oprfResponse(betas, ro, group) {
@@ -686,8 +679,7 @@ async function oprfResponse(betas, ro, group) {
  * Generates the challenge alpha^k.
  * @param {BigIntegerAdapter} alpha Hp_x^ro received from client
  * @param {BigIntegerAdapter} k The OPRF key, secret value
- * @param {PrimeGroup} group A PrimeGroup object determining the
- * modulus of operations
+ * @param {PrimeGroup} group The group in which the operations are done 
  * @return {Promise<BigIntegerAdapter>} beta = alpha^k
  */
 async function oprfChallenge(alpha, k, group) {
@@ -702,8 +694,7 @@ async function oprfChallenge(alpha, k, group) {
  * This function also returns ro, which should be kept secret and only
  * be used as an input to the reconstructPassword function.
  * @param {string} secret Client input to OPRF
- * @param {PrimeGroup} group A PrimeGroup object determining the
- * modulus of operations
+ * @param {PrimeGroup} group The group in which the operations are done 
  * @return {Promise<[BigIntegerAdapter, BigIntegerAdapter]>} [ro, alpha]
  * A pair holding the random number ro and alpha= Hp_x^ro
  */
@@ -723,8 +714,7 @@ async function oprfMask(secret, group) {
  * Returns a promise resolving to the hash as a hex string.
  * This is not fixed sized output, though.
  * @param {string} str String to digest into hash
- * @param {PrimeGroup} group A PrimeGroup object determining the
- * modulus of operations
+ * @param {PrimeGroup} group The group in which the operations are done 
  * @return {Promise<string>} Hp(str) in hexadecimal string form
  */
 async function hashPrime(str, group) { //* Full domain hash, problem: Z_n*
@@ -747,12 +737,7 @@ async function hashPrime(str, group) { //* Full domain hash, problem: Z_n*
 async function hash(str) {
   const enc = new TextEncoder();
   const data = enc.encode(str);
-  let Crypto;
-  if (typeof require !== 'undefined' && require.main === module) {
-    Crypto = require('crypto');
-  } else {
-    Crypto = self.crypto;
-  }
+  const Crypto = importCrypto();
   let hash = await Crypto.subtle.digest('SHA-256', data);
   hash = Buffer.from(hash).toString('hex');
   // Converstion to string may reduce size only when there
@@ -1043,13 +1028,7 @@ class BigIntegerAdapter {
    */
   static randomLen(len, force=false) {
     // * No modulo operations, no biasing.
-    // Decide on Crypto interface
-    let Crypto;
-    if (typeof require !== 'undefined' && require.main === module) {
-      Crypto = require('crypto');
-    } else {
-      Crypto = self.crypto;
-    }
+    const Crypto = importCrypto()
     // Create a random ArrayBuffer
     const upLen = Math.ceil(len/8);
     let rnd = Crypto.getRandomValues(new Uint8Array(upLen)); // Uint8Array
@@ -1069,6 +1048,7 @@ class BigIntegerAdapter {
    */
   static randomMod(mod) {
     // ! Careful, biasing unhandled!
+    // TODO: Handle biasing
     return BigIntegerAdapter.randomLen(mod.bitLen()).mod(mod);
   }
 
@@ -1126,7 +1106,6 @@ class BigIntegerAdapter {
 
 // --- Some helpful functions ---
 function importCrypto() {
-  // TODO: Test if this works
   let Crypto;
   if (typeof require !== 'undefined' && require.main === module) {
     Crypto = require('crypto');
@@ -1162,9 +1141,7 @@ function toArrayBuffer(buf) {
  * prints a black string.
  */
 function print(T='', newline=true, html=false, color='') {
-  // TODO: Fix this
   // ! Printing with color does not work
-  // ! JS and default arguments act unlike Python.
   if (color!='') {
     console.log('%c' + T, 'color: ' + color);
   } else if (!newline) {
@@ -1204,5 +1181,5 @@ function printError(T) {
 
 // This check protects importing scripts from running main().
 if (typeof require != 'undefined' && require.main == module) {
-  manuelTest();
+  manualTest();
 }
