@@ -10,7 +10,7 @@ const VERBOSE = false;
 // TODO: Write proper tests.
 // eslint-disable-next-line require-jsdoc
 function main() {
-  testCompartmanted([3], [2], 5);
+  testCompartmented([3, 3], [2, 2], 5);
 }
 
 
@@ -211,24 +211,24 @@ async function testOPRF(secret) {
 }
 
 /**
- * Tests Compartmanted Secret Sharing
+ * Tests Compartmented Secret Sharing
  * @param {[int]} bucketSizes
  * @param {[int]} bucketThresholds 
  * @param {int} it Iteration count 
  */
-function testCompartmanted(bucketSizes, bucketThresholds, it) {
+function testCompartmented(bucketSizes, bucketThresholds, it) {
   const G = new PrimeGroup();
   const [modulus, order] = [G.modulus, G.order];
-  console.time('Compartmanted tests');
+  console.time('Compartmented tests');
   for (let i = 1; i <= it; i++) {
     const [newSizes, newThresholds] = [bucketSizes.slice(), bucketThresholds.slice()];
     for (let j = 0; j < newSizes.length; j++) {
       newSizes[j] *= i;
       newThresholds[j] *= i;
     }
-    console.time('Compartmanted test #' + i);
+    console.time('Compartmented test #' + i);
     const secret = G.randomExponent(); // ! Be careful with this
-    const compShares = compartmantedGenShares(secret, newSizes,
+    const compShares = compartmentedGenShares(secret, newSizes,
       newThresholds, G);
     if (VERBOSE) { // This redundant check may reduce unnecessary loops
       printVerbose('Generated shares:');
@@ -239,20 +239,20 @@ function testCompartmanted(bucketSizes, bucketThresholds, it) {
         });
       });
     }
-    const recons = compartmantedCombineShares(compShares, G);
-    console.timeEnd('Compartmanted test #' + i);
+    const recons = compartmentedCombineShares(compShares, G);
+    console.timeEnd('Compartmented test #' + i);
     printVerbose('Secret reconstructed:');
     printVerbose('\tOriginal secret: ' + secret.toString(16));
     printVerbose('\tReconstructed secret: ' + recons.toString(16));
     const check = secret.eqMod(recons, order);
     if (check) continue;
-    console.timeEnd('Compartmanted tests');
-    printError('Compartmanted Secret Sharing test #' + i + ' failed');
+    console.timeEnd('Compartmented tests');
+    printError('Compartmented Secret Sharing test #' + i + ' failed');
     printError('Secret:\n' + secret.toString(16));
     printError('Recons:\n' + recons.toString(16));
     return false;
   }
-  console.timeEnd('Compartmanted tests');
+  console.timeEnd('Compartmented tests');
   return true;
 }
 
@@ -504,7 +504,7 @@ function schnorrVerify(X, Y, z, c, group) {
 // --- Identification Scheme end ---
 // --- Secret Sharing functions ---
 /**
- * Generates shares from a secret according to Compartmanted
+ * Generates shares from a secret according to Compartmented
  * Secret Sharing as presented in INSERT LINK HERE
  * Each compartment (bucket) has a threshold of its own,
  * allowing for an access control mechanism.
@@ -516,7 +516,7 @@ function schnorrVerify(X, Y, z, c, group) {
  * of compartment i. Element j of compartment i should get the share
  * shares[i][j].
  */
-function compartmantedGenShares(secret, bucketSizes, bucketThresholds, group) {
+function compartmentedGenShares(secret, bucketSizes, bucketThresholds, group) {
   if (bucketSizes.length != bucketThresholds.length) {
     printError('bucketSizes and bucketThresholds sizes do not match.');
     return [];
@@ -538,7 +538,7 @@ function compartmantedGenShares(secret, bucketSizes, bucketThresholds, group) {
 }
 
 /**
- * Combines shares to reveal a secret according to Compartmanted
+ * Combines shares to reveal a secret according to Compartmented
  * Secret Sharing as presented in INSERT LINK HERE.
  * Does not check for the correctness of shares. If the shares
  * are input incorrectly, generates a wrong output.
@@ -547,7 +547,7 @@ function compartmantedGenShares(secret, bucketSizes, bucketThresholds, group) {
  * @param {PrimeGroup} group The group in which the operations are done 
  * @returns {BigIntegerAdapter} The reconstructed secret
  */
-function compartmantedCombineShares(shares, group) {
+function compartmentedCombineShares(shares, group) {
   const bucketCount = shares.length;
   var secret = new BigIntegerAdapter(0);
   for (let i = 0; i < bucketCount; i++) {
