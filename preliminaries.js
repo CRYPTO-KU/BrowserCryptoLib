@@ -221,6 +221,7 @@ async function testOPRF(secret) {
  * @return {boolean} Whether the tests are successful
  */
 function testShamir(n, t, it, exponent=false) {
+  // TODO: Test with lambdas pre-calculated
   const G = new PrimeGroup();
   const modulus = G.modulus;
   const order = G.order;
