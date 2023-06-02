@@ -3,7 +3,6 @@
 // * Note: DEBUG and VERBOSE options may slightly reduce performance.
 const DEBUG = false;
 const VERBOSE = false;
-iterations = 0;
 // TODO: Exceptions and handling
 // TODO: Maintain older functions, there are likely a ton of broken code
 
@@ -11,7 +10,7 @@ iterations = 0;
 // TODO: Write proper tests.
 // eslint-disable-next-line require-jsdoc
 function main() {
-  testTOPRF('Burcunun sifresi', 5, 3, 10, true);
+  testSchnorr(5);
 }
 
 
@@ -44,8 +43,8 @@ function testSchnorr(it=5) {
   for (let i = 1; i <= it; i++) {
     console.time('Schnorr test #' + i);
     const c = schnorrChallenge(G);
-    let resp = schnorrResponse(secret, c, G);
-    const result =  schnorrVerify(secret[0], secret[1], secret[2], c, G);
+    var resp = schnorrResponse(secret, c, G);
+    const result =  schnorrVerify(resp[0], resp[1], resp[2], c, G);
     console.timeEnd('Schnorr test #' + i);
     if (result) continue;
     printError('Schnorr test #' + i + ' failed.');
@@ -414,8 +413,7 @@ async function importKey(exportedKey) {
  * @return {BigIntegerAdapter} c Random challenge
  */
 function schnorrChallenge(group) {
-  const c = group.randomExponent();
-  return c;
+  return group.randomExponent();
 }
 
 /**
@@ -433,11 +431,12 @@ function schnorrChallenge(group) {
  */
 function schnorrResponse(x, c, group) {
   const mod = group.modulus;
+  const ord = group.order;
   const g = group.generator;
   const X = g.powMod(x, mod);
   const y = group.randomExponent();
   const Y = g.powMod(y, mod);
-  const z = y.mulMod(x.powMod(c, mod), mod);
+  const z = y.addMod(x.mulMod(c, ord), ord);
   return [X, Y, z];
 }
 

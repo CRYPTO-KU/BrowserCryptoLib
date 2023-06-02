@@ -3,7 +3,7 @@ The following functionality exists:
 	Polynomials
 	Shamir
 	OPRF
-	
+	Schnorr
 
 Does not work:
 	t-OPRF
