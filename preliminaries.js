@@ -10,7 +10,7 @@ const VERBOSE = false;
 // TODO: Write proper tests.
 // eslint-disable-next-line require-jsdoc
 function main() {
-  testSchnorr(5);
+  testCompartmanted([3], [2], 5);
 }
 
 
@@ -163,8 +163,6 @@ async function testTOPRF(secret, n, t, it, lambdas=false) {
       if (lambdas) beta_i.push(calculateLambda(i, keys.length, G.order));
       betas.push(beta_i);
     }
-    print("HERE 3:")
-    print(betas);
     const resp = await oprfResponse(betas, ro, G);
     const check = result.eqMod(resp, G.modulus);
     console.timeEnd('t-OPRF test #' + i + ': n=' + n*i + ', t=' + t*i);
@@ -213,6 +211,52 @@ async function testOPRF(secret) {
 }
 
 /**
+ * Tests Compartmanted Secret Sharing
+ * @param {[int]} bucketSizes
+ * @param {[int]} bucketThresholds 
+ * @param {int} it Iteration count 
+ */
+function testCompartmanted(bucketSizes, bucketThresholds, it) {
+  const G = new PrimeGroup();
+  const [modulus, order] = [G.modulus, G.order];
+  console.time('Compartmanted tests');
+  for (let i = 1; i <= it; i++) {
+    const [newSizes, newThresholds] = [bucketSizes.slice(), bucketThresholds.slice()];
+    for (let j = 0; j < newSizes.length; j++) {
+      newSizes[j] *= i;
+      newThresholds[j] *= i;
+    }
+    console.time('Compartmanted test #' + i);
+    const secret = G.randomExponent(); // ! Be careful with this
+    const compShares = compartmantedGenShares(secret, newSizes,
+      newThresholds, G);
+    if (VERBOSE) { // This redundant check may reduce unnecessary loops
+      printVerbose('Generated shares:');
+      compShares.forEach(function(shares, compartment) {
+        printVerbose('\tShares of compartment #' + compartment);
+        shares.forEach(function(share, index) {
+          printVerbose('\t\tShare #' + index + ': ' + share[1].toString(16));
+        });
+      });
+    }
+    const recons = compartmantedCombineShares(compShares, G);
+    console.timeEnd('Compartmanted test #' + i);
+    printVerbose('Secret reconstructed:');
+    printVerbose('\tOriginal secret: ' + secret.toString(16));
+    printVerbose('\tReconstructed secret: ' + recons.toString(16));
+    const check = secret.eqMod(recons, order);
+    if (check) continue;
+    console.timeEnd('Compartmanted tests');
+    printError('Compartmanted Secret Sharing test #' + i + ' failed');
+    printError('Secret:\n' + secret.toString(16));
+    printError('Recons:\n' + recons.toString(16));
+    return false;
+  }
+  console.timeEnd('Compartmanted tests');
+  return true;
+}
+
+/**
  * Tests Shamir's Secret Sharing on base or exponenets.
  * @param {int} n Share count
  * @param {int} t Threhsold
@@ -235,7 +279,7 @@ function testShamir(n, t, it, exponent=false) {
     if (VERBOSE) { // This redundant check may reduce unnecessary loops
       printVerbose('Generated shares:');
       for (const share of shares) {
-        printVerbose('\tShare #' + share[0] + ': ' + share[1].toString());
+        printVerbose('\tShare #' + share[0] + ': ' + share[1].toString(16));
       }
     }
     let secret_elm;
@@ -247,21 +291,21 @@ function testShamir(n, t, it, exponent=false) {
       }
     }
     const recons = shamirCombineShares(shares.slice(0, t*i), G, exponent);
-    printVerbose('Secret reconstructed:');
-    printVerbose('\tOriginal secret: ' + secret.toString());
-    printVerbose('\tReconstructed secret: ' + recons.toString());
     console.timeEnd('Shamir test on '+
-      (exponent ? 'exponent' : 'base')+
-      ' #' + i + ': n=' + n*i + ', t=' + t*i);
+    (exponent ? 'exponent' : 'base')+
+    ' #' + i + ': n=' + n*i + ', t=' + t*i);
+    printVerbose('Secret reconstructed:');
+    printVerbose('\tOriginal secret: ' + secret.toString(16));
+    printVerbose('\tReconstructed secret: ' + recons.toString(16));
     const check = exponent ?
       secret_elm.eqMod(recons, modulus) : secret.eqMod(recons, order);
     if (check) continue;
-	console.timeEnd('Shamir tests');
+	  console.timeEnd('Shamir tests');
     printError('Shamir\'s Secret Sharing tests on '+
       (exponent ? 'exponent' : 'base')+
       ' failed at n=' + n*i + ', t=' + t*i);
-    printError('Secret:\n' + secret.toString());
-    printError('Recons:\n' + recons.toString());
+    printError('Secret:\n' + secret.toString(16));
+    printError('Recons:\n' + recons.toString(16));
     return false;
   }
   console.timeEnd('Shamir tests');
@@ -488,7 +532,7 @@ function compartmantedGenShares(secret, bucketSizes, bucketThresholds, group) {
   bucketSecrets.push(secret.subtractMod(total, group.modulus)); // Sum of bucketSecrets = secret
   const shares = [];
   for (let i = 0; i < bucketCount; i++) {
-    shares.push[shamirGenShares(bucketSecrets[i], bucketSizes[i], bucketThresholds[i], group)];
+    shares.push(shamirGenShares(bucketSecrets[i], bucketSizes[i], bucketThresholds[i], group));
   }
   return shares;
 }
@@ -537,14 +581,12 @@ function shamirCombineShares(shares, group, exponent=false) {
   const n = shares.length;
   const mod = group.modulus;
   const ord = group.order;
-  let at_0 = exponent ? new BigIntegerAdapter(1) : new BigIntegerAdapter(0);
-  const lambdas = shares.length == 3;
+  var at_0 = exponent ? new BigIntegerAdapter(1) : new BigIntegerAdapter(0);
+  const lambdas = shares[0].length == 3;
   for (const point of shares) {
     const i = point[0]; // int, not bigInt
     const at_i = point[1];
     const lambda_i = lambdas ? point[2] : calculateLambda(i, n, ord);
-    print("HERE: ")
-    print(point[2].toString())
     if (exponent) at_0 = at_0.mulMod(at_i.powMod(lambda_i, mod), mod);
     else at_0 = at_0.addMod(at_i.mulMod(lambda_i, ord), ord);
   }
@@ -561,9 +603,8 @@ function shamirCombineShares(shares, group, exponent=false) {
  * secret. Each share is a tuple of (int, BigIntegerAdapter)
  */
 function shamirGenShares(secret, n, t, group) {
-  if (typeof secret == 'string') {
+  if (typeof secret == 'string')
     secret = new BigIntegerAdapter(secret);
-  }
   const pnomial = genPol(secret, t, group);
   const shares = [];
   for (let i = 1; i <= n; i++) {

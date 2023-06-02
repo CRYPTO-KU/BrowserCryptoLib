@@ -1,16 +1,16 @@
 The following functionality exists:
 	PrimeGroup
 	Polynomials
-	Shamir (Not tested with the precalculation of lambdas)
+	Shamir
 	OPRF
 	Schnorr
+	t-OPRF
 
 Does not work:
-	t-OPRF
+	Compartmanted (Modulus and Order seems to be the problem)
 
 Needs testing:
 	Enc/Dec
-	Compartmanted
 
 Not implemented:
 	Sign
