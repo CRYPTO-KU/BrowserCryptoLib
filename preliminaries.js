@@ -218,7 +218,6 @@ async function testOPRF(secret) {
  */
 function testCompartmented(bucketSizes, bucketThresholds, it) {
   const G = new PrimeGroup();
-  const [modulus, order] = [G.modulus, G.order];
   console.time('Compartmented tests');
   for (let i = 1; i <= it; i++) {
     const [newSizes, newThresholds] = [bucketSizes.slice(), bucketThresholds.slice()];
@@ -244,7 +243,7 @@ function testCompartmented(bucketSizes, bucketThresholds, it) {
     printVerbose('Secret reconstructed:');
     printVerbose('\tOriginal secret: ' + secret.toString(16));
     printVerbose('\tReconstructed secret: ' + recons.toString(16));
-    const check = secret.eqMod(recons, order);
+    const check = secret.eqMod(recons, G.order);
     if (check) continue;
     console.timeEnd('Compartmented tests');
     printError('Compartmented Secret Sharing test #' + i + ' failed');
@@ -523,13 +522,13 @@ function compartmentedGenShares(secret, bucketSizes, bucketThresholds, group) {
   }
   const bucketCount = bucketSizes.length;
   const bucketSecrets = [];
-  let total = new BigIntegerAdapter(0);
+  var total = new BigIntegerAdapter(0);
   for (let i = 1; i < bucketCount; i++) {
-    const randomElement = group.randomElement();
-    total.addMod(randomElement, group.modulus);
-    bucketSecrets.push(randomElement);
+    const randomExponent = group.randomExponent();
+    total = total.addMod(randomExponent, group.order);
+    bucketSecrets.push(randomExponent);
   }
-  bucketSecrets.push(secret.subtractMod(total, group.modulus)); // Sum of bucketSecrets = secret
+  bucketSecrets.push(secret.subtractMod(total, group.order)); // Sum of bucketSecrets = secret
   const shares = [];
   for (let i = 0; i < bucketCount; i++) {
     shares.push(shamirGenShares(bucketSecrets[i], bucketSizes[i], bucketThresholds[i], group));
@@ -552,7 +551,7 @@ function compartmentedCombineShares(shares, group) {
   var secret = new BigIntegerAdapter(0);
   for (let i = 0; i < bucketCount; i++) {
     const bucketSecret = shamirCombineShares(shares[i], group);
-    secret = secret.addMod(bucketSecret, group.modulus);
+    secret = secret.addMod(bucketSecret, group.order);
   }
   return secret;
 }
