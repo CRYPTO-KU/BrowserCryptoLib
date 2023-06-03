@@ -369,6 +369,44 @@ function testGroup() {
 }
 
 // --- Tests end ---
+// --- Cryptographic Signature Functions ---
+async function sign(message, privateKey) {
+  const Crypto = importCrypto();
+  const encoded = new TextEncoder().encode(message);
+  return await Crypto.subtle.sign(
+    'RSASSA-PKCS1-v1_5',
+    privateKey,
+    encoded
+  );
+}
+
+// TODO: Documentation here and above
+async function verify(message, signature, publicKey) {
+  const Crypto = importCrypto();
+  const encoded = new TextEncoder().encode(message);
+  return await Crypto.subtle.verify(
+    'RSASSA-PKCS1-v1_5',
+    publicKey,
+    signature,
+    encoded
+  );
+}
+
+async function generateSignatureKeys() {
+  const Crypto = importCrypto();
+  const keyPair = Crypto.subtle.generateKey(
+    {
+      name: 'RSASSA-PKCS1-v1_5', // Can also use RSA-PSS which uses a random salt
+      modulusLength: '2048',
+      publicExponent: new Uint8Array([1, 0, 1]),
+      hash: 'SHA-256',
+    },
+    true,
+    ['sign', 'verify']
+  );
+  return keyPair;
+}
+// --- Signature end ---
 // --- Symmetric Encryption Functions ---
 // TODO: Test these functions
 /**
@@ -385,10 +423,10 @@ function testGroup() {
 async function decrypt(ciphertext, password, hashFunction, iterations, salt, counter) {
   const dec = new TextDecoder();
   const Crypto = importCrypto();
-  const key = await deriveKey(password, hashFunction, iterations, salt);
+  const key = await deriveEncryptionKey(password, hashFunction, iterations, salt);
   const decrypted = await Crypto.subtle.decrypt(
     {
-      name: "AES-CTR",
+      name: 'AES-CTR',
       counter,
       length:64
     },
@@ -416,11 +454,11 @@ async function encrypt(message, password, hashFunction, iterations, saltLen) {
   const Crypto = importCrypto();
   const plaintext = enc.encode(message);
   const salt = Crypto.getRandomValues(new Uint8Array(saltLen));
-  const key  = await deriveKey(enc.encode(password), hashFunction, iterations, salt);
+  const key  = await deriveEncryptionKey(enc.encode(password), hashFunction, iterations, salt);
   let counter = Crypto.getRandomValues(new Uint8Array(16));
   let ciphertext = await Crypto.subtle.encrypt(
-    {
-      name: "AES-CTR",
+  {
+      name: 'AES-CTR',
       counter,
       length: 64
     },
@@ -429,41 +467,41 @@ async function encrypt(message, password, hashFunction, iterations, saltLen) {
   return [ciphertext, counter, salt];
 }
 
-async function deriveKey(encodedPw, hashFunction, iterations, salt) {
+async function deriveEncryptionKey(encodedPw, hashFunction, iterations, salt) {
   const Crypto = importCrypto();
   const keyMaterial = await Crypto.subtle.importKey(
-    "raw",
+    'raw',
     encodedPw,
-    "PBKDF2",
+    'PBKDF2',
     false,
-    ["deriveBits", "deriveKey"]);
+    ['deriveBits', 'deriveKey']);
   const key = await Crypto.subtle.deriveKey(
     {
-      "name": "PBKDF2",
+      'name': 'PBKDF2',
       salt: salt,
-      "iterations": iterations,
-      "hash": hashFunction
+      'iterations': iterations,
+      'hash': hashFunction
     },
     keyMaterial,
-    {"name": "AES-CTR", "length": 256},
+    {'name': 'AES-CTR', 'length': 256},
     true,
-    ["encrypt", "decrypt"]);
+    ['encrypt', 'decrypt']);
   return key;
 }
 
 async function exportKey(key) {
   const Crypto = importCrypto();
-  return await Crypto.subtle.exportKey("raw", key);
+  return await Crypto.subtle.exportKey('raw', key); // TODO: Check if 'raw is okay.
 }
 
-async function importKey(exportedKey) {
+async function importEncryptionKey(exportedKey) {
   const Crypto = importCrypto();
   return await Crypto.subtle.importKey(
-   "raw",
+   'raw',
     exportedKey,
-    "AES-CTR",
+    'AES-CTR',
     true,
-    ["encrypt", "decrypt"]);
+    ['encrypt', 'decrypt']);
 }
 /// --- Symmetric Encryption end ---
 // --- Identification Scheme Functions ---
