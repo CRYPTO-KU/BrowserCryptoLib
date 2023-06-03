@@ -7,10 +7,10 @@ The following functionality exists:
 	t-OPRF
 	Enc/Dec
 	Compartmanted
+	Sign
 
 Does not work:
 
 Needs testing:
 
 Not implemented:
-	Sign

@@ -10,7 +10,7 @@ const VERBOSE = false;
 // TODO: Write proper tests.
 // eslint-disable-next-line require-jsdoc
 function main() {
-  testEncryption(5);
+  testSignature();
 }
 
 
@@ -32,21 +32,42 @@ async function testAll(it=5) {
   console.timeEnd('\nTotal runtime for tests');
 }
 
+async function testSignature(it=5) {
+  for (let i = 0; i < it; i++ ) {
+    const keyPair = await generateSignatureKeys();
+    const message = 'This is some very secret message '+
+      'sent over a secure channel.';
+    const signature = await sign(message, keyPair.privateKey);
+    printVerbose('Signature:')
+    printVerbose(signature);
+    const check = await verify(message, signature, keyPair.publicKey);
+    print(check ? 'Successful!' : 'Unsuccessful...');
+  }
+}
 
+// TODO: Documentation here and above
 async function testEncryption(it=5) {
-  const plaintext = BigIntegerAdapter.randomLen(256);
-  print('Plaintext: ');
-  print(plaintext.toString(16));
-  const password = 'Burcunun sifresi'
-  const hashFunction = 'SHA-256';
-  const pbkdfIterations = 100_000;
-  const [ciphertext, counter, salt] = await encrypt(plaintext,
-    password, hashFunction, pbkdfIterations, 5);
-  print('Ciphertext: ');
-  print(ciphertext);
-  const decrypted = await decrypt(ciphertext, password, hashFunction, pbkdfIterations, salt, counter);
-  print('Decrypted: ');
-  print(decrypted);
+  for (let i = 0; i < it; i++) {
+    const plaintext = BigIntegerAdapter.randomLen(256);
+    const password = 'Burcunun sifresi'
+    const hashFunction = 'SHA-256';
+    const pbkdfIterations = 100000;
+    const [ciphertext, counter, salt] = await encrypt(plaintext,
+      password, hashFunction, pbkdfIterations, 5);
+    const decrypted = await decrypt(ciphertext, password, hashFunction, pbkdfIterations, salt, counter);
+    if (decrypted == plaintext.toString(16))
+      continue
+    printError('Decryption unsuccessful at try #' + i +'.');
+    printDebug('Plaintext: ');
+    printDebug(plaintext.toString(16));
+    printDebug('Ciphertext: ');
+    printDebug(ciphertext.toString(16));
+    printDebug('Decrypted: ');
+    printDebug(decrypted);
+    return false;
+  }
+  print('Encryption tests successful.');
+  return true;
 }
 
 /**
@@ -76,11 +97,11 @@ function testSchnorr(it=5) {
  */
 function testBigInt(it=500) {
   // Divide functions into different arrays depending on parameters 
-  simpleFunctions = ['bitLen', 'probPrime', 'toString']; // no input functions
-  numFunctions = ['add', 'subtract', 'mul', 'divide','eq', 'leq', 'geq', 'lesser', 'greater']; // Not pow, it goes out of range with random numbers
-  modFunctions = ['mod', 'randomMod'] // Not invMod, coprime numbers needed
-  nmFunctions = ['addMod', 'subtractMod', 'mulMod', 'powMod', 'eqMod']; // num and mod input functions
-  lenFunctions =['randomLen', 'randomPrime'];
+  const simpleFunctions = ['bitLen', 'probPrime', 'toString']; // no input functions
+  const numFunctions = ['add', 'subtract', 'mul', 'divide','eq', 'leq', 'geq', 'lesser', 'greater']; // Not pow, it goes out of range with random numbers
+  const modFunctions = ['mod', 'randomMod'] // Not invMod, coprime numbers needed
+  const nmFunctions = ['addMod', 'subtractMod', 'mulMod', 'powMod', 'eqMod']; // num and mod input functions
+  const lenFunctions =['randomLen', 'randomPrime'];
 
   let num = BigIntegerAdapter.randomLen(256);
   let mod = BigIntegerAdapter.randomLen(256);
@@ -397,7 +418,7 @@ async function generateSignatureKeys() {
   const keyPair = Crypto.subtle.generateKey(
     {
       name: 'RSASSA-PKCS1-v1_5', // Can also use RSA-PSS which uses a random salt
-      modulusLength: '2048',
+      modulusLength: 2048,
       publicExponent: new Uint8Array([1, 0, 1]),
       hash: 'SHA-256',
     },
@@ -418,7 +439,7 @@ async function generateSignatureKeys() {
  * @param {int} iterations Used for key derivation (PBKDF2)
  * @param {Uint8Array} salt Used for key derivation (PBKDF2)
  * @param {Uint8Array(16)} counter
- * @return 
+ * @return {Promise<string>} plaintext
  */
 async function decrypt(ciphertext, password, hashFunction, iterations, salt, counter) {
   const dec = new TextDecoder();
@@ -445,7 +466,7 @@ async function decrypt(ciphertext, password, hashFunction, iterations, salt, cou
  * @param {string} hashFunction Used for key derivation (PBKDF2)
  * @param {int} iterations Used for key derivation (PBKDF2)
  * @param {int} saltLen Used for key derivation (PBKDF2)
- * @return {[ArrayBuffer, Uint8Array(16), Uint8Array(saltLen)]} [ciphertext, counter, salt]
+ * @return {Promise<[ArrayBuffer, Uint8Array(16), Uint8Array(saltLen)]>} [ciphertext, counter, salt]
  */
 async function encrypt(message, password, hashFunction, iterations, saltLen) {
   if (message instanceof BigIntegerAdapter)
