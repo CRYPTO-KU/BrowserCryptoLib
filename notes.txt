@@ -5,12 +5,12 @@ The following functionality exists:
 	OPRF
 	Schnorr
 	t-OPRF
+	Enc/Dec
+	Compartmanted
 
 Does not work:
-	Compartmanted (Modulus and Order seems to be the problem)
 
 Needs testing:
-	Enc/Dec
 
 Not implemented:
 	Sign
