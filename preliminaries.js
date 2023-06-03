@@ -10,7 +10,7 @@ const VERBOSE = false;
 // TODO: Write proper tests.
 // eslint-disable-next-line require-jsdoc
 function main() {
-  testCompartmented([3, 3], [2, 2], 5);
+  testEncryption(5);
 }
 
 
@@ -30,6 +30,23 @@ async function testAll(it=5) {
   const tOPRFTest = await testT_OPRF(secret, 3, 2, it);
   const tOPRFTestLambda = await testT_OPRF(secret, 3, 2, it, true);
   console.timeEnd('\nTotal runtime for tests');
+}
+
+
+async function testEncryption(it=5) {
+  const plaintext = BigIntegerAdapter.randomLen(256);
+  print('Plaintext: ');
+  print(plaintext.toString(16));
+  const password = 'Burcunun sifresi'
+  const hashFunction = 'SHA-256';
+  const pbkdfIterations = 100_000;
+  const [ciphertext, counter, salt] = await encrypt(plaintext,
+    password, hashFunction, pbkdfIterations, 5);
+  print('Ciphertext: ');
+  print(ciphertext);
+  const decrypted = await decrypt(ciphertext, password, hashFunction, pbkdfIterations, salt, counter);
+  print('Decrypted: ');
+  print(decrypted);
 }
 
 /**
@@ -368,7 +385,7 @@ function testGroup() {
 async function decrypt(ciphertext, password, hashFunction, iterations, salt, counter) {
   const dec = new TextDecoder();
   const Crypto = importCrypto();
-  const key = deriveKey(password, hashFunction, iterations, salt);
+  const key = await deriveKey(password, hashFunction, iterations, salt);
   const decrypted = await Crypto.subtle.decrypt(
     {
       name: "AES-CTR",
@@ -385,7 +402,7 @@ async function decrypt(ciphertext, password, hashFunction, iterations, salt, cou
  * simplify its use. CTR and CBC modes are non-authenticated
  * encryption schemes, whereas GCM mode includes authentication.
  * TODO: Let caller choose encryption and hash functions.
- * @param {BigIntegerAdapter} message  Original plaintext
+ * @param {BigIntegerAdapter | string} message  Original plaintext
  * @param {string} password User input to derive the encryption key
  * @param {string} hashFunction Used for key derivation (PBKDF2)
  * @param {int} iterations Used for key derivation (PBKDF2)
@@ -393,9 +410,11 @@ async function decrypt(ciphertext, password, hashFunction, iterations, salt, cou
  * @return {[ArrayBuffer, Uint8Array(16), Uint8Array(saltLen)]} [ciphertext, counter, salt]
  */
 async function encrypt(message, password, hashFunction, iterations, saltLen) {
+  if (message instanceof BigIntegerAdapter)
+    message = message.toString(16);
   const enc = new TextEncoder();
   const Crypto = importCrypto();
-  const plaintext = enc.encode(message.toString(16));
+  const plaintext = enc.encode(message);
   const salt = Crypto.getRandomValues(new Uint8Array(saltLen));
   const key  = await deriveKey(enc.encode(password), hashFunction, iterations, salt);
   let counter = Crypto.getRandomValues(new Uint8Array(16));
