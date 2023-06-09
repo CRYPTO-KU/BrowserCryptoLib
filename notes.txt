@@ -1,15 +1,18 @@
+The following tests are completed:
+	Enc/Dec
+	Sign
+	Schnorr
+	t-OPRF
+	OPRF
+	Compartmented SS
+
 The following functionality exists:
 	PrimeGroup
 	Polynomials
-	Shamir
-	OPRF
-	Schnorr
-	t-OPRF
-	Enc/Dec
-	Compartmanted
-	Sign
+	Shamir SS
 
 Does not work:
+	t-OPRF precalculation of lambdas
 
 Needs testing:
 

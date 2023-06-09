@@ -3,61 +3,88 @@
 // * Note: DEBUG and VERBOSE options may slightly reduce performance.
 const DEBUG = false;
 const VERBOSE = false;
-// TODO: Exceptions and handling
-// TODO: Maintain older functions, there are likely a ton of broken code
-
+// TODO: Standardize Debug and Verbose printing (Debug starting, ending. Verbose values.)
+// TODO: Remove redundant if(VERBOSE) checks, they are no longer counted in the performance.
+// TODO: Exceptions and handling before release
 // --- TESTS ---
 // TODO: Write proper tests.
 // eslint-disable-next-line require-jsdoc
-function main() {
-  testSignature();
+async function main() {
+  const times = await testSignature(5);
+  await testEncryption(5, times);
+  testSchnorr(5, times);
+  await testTOPRF(3, 2, 5, false, times);
+  await testTOPRF(5, 3, 5, false, times);
+  await testOPRF(5, times);
+  testCompartmented([5, 3, 5, 4], [3, 2, 4, 4], 5, times);
+  print(times);
 }
 
-
-/**
- * Runs all tests.
- * @param {int} it Iteration count
- */
-async function testAll(it=5) {
-  // TODO: Add all tests here. Scrap that, add all tests to a separate file
-  const secret = 'Meaning of life.';
-  console.time('\nTotal runtime for tests');
-  const groupTest = testGroup(it);
-  const polTest = testPolynomials(it);
-  const baseShamirTest = testShamir(3, 2, it, false);
-  const exponentShamirTest = testShamir(3, 2, it, true);
-  const OPRFTest = await testOPRF(secret);
-  const tOPRFTest = await testT_OPRF(secret, 3, 2, it);
-  const tOPRFTestLambda = await testT_OPRF(secret, 3, 2, it, true);
-  console.timeEnd('\nTotal runtime for tests');
-}
-
-async function testSignature(it=5) {
+async function testSignature(it=5, resultMap) {
+  const times = new Map([
+    ['Signature KeyGen', []],
+    ['Sign', []],
+    ['Verify', []]
+  ]);
+  const message = 'This is some very secret message '+
+    'sent over a secure channel.';
   for (let i = 0; i < it; i++ ) {
-    const keyPair = await generateSignatureKeys();
-    const message = 'This is some very secret message '+
-      'sent over a secure channel.';
+	  var t0 = performance.now();
+	  const keyPair = await generateSignatureKeys();
+	  var t1 = performance.now();
+	  const keyGenTime = (t1 - t0);
+	  t0 = performance.now();
     const signature = await sign(message, keyPair.privateKey);
+	  t1 = performance.now();
+	  const signTime = (t1 - t0);
     printVerbose('Signature:')
     printVerbose(signature);
+	  t0 = performance.now();
     const check = await verify(message, signature, keyPair.publicKey);
-    print(check ? 'Successful!' : 'Unsuccessful...');
+	  t1 = performance.now();
+	  const verifyTime = (t1 - t0);
+    times.get('Signature KeyGen').push(keyGenTime);
+    times.get('Sign').push(signTime);
+    times.get('Verify').push(verifyTime);
+    if (check) continue;
+    printError('Signature test #' + i + 'failed.');
+		return false;
   }
+  print('Signature tests successful.');
+  if (!resultMap)
+    return times;
+  for (const [key, value] of times) {
+    resultMap.set(key, value);
+  }
+  return resultMap;
 }
 
 // TODO: Documentation here and above
-async function testEncryption(it=5) {
-  for (let i = 0; i < it; i++) {
+async function testEncryption(it=5, resultMap) {
+  const times = new Map([
+    ['encrypt', []],
+    ['decrypt', []]
+  ]);
+  for (let i = 1; i <= it; i++) {
     const plaintext = BigIntegerAdapter.randomLen(256);
-    const password = 'Burcunun sifresi'
+    const password = 'A secure password'
     const hashFunction = 'SHA-256';
     const pbkdfIterations = 100000;
+    var t0 = performance.now();
     const [ciphertext, counter, salt] = await encrypt(plaintext,
       password, hashFunction, pbkdfIterations, 5);
-    const decrypted = await decrypt(ciphertext, password, hashFunction, pbkdfIterations, salt, counter);
+    var t1 = performance.now();
+    const encryptTime = (t1 - t0);
+    t0 = performance.now();
+    const decrypted = await decrypt(ciphertext, password,
+      hashFunction, pbkdfIterations, salt, counter);
+    t1 = performance.now();
+    const decryptTime = (t1 - t0);
+    times.get('encrypt').push(encryptTime);
+    times.get('decrypt').push(decryptTime);
     if (decrypted == plaintext.toString(16))
       continue
-    printError('Decryption unsuccessful at try #' + i +'.');
+    printError('Decryption test #' + i +' failed.');
     printDebug('Plaintext: ');
     printDebug(plaintext.toString(16));
     printDebug('Ciphertext: ');
@@ -67,7 +94,12 @@ async function testEncryption(it=5) {
     return false;
   }
   print('Encryption tests successful.');
-  return true;
+  if (!resultMap)
+    return times;
+  for (const [key, value] of times) {
+    resultMap.set(key, value);
+  }
+  return resultMap;
 }
 
 /**
@@ -75,20 +107,41 @@ async function testEncryption(it=5) {
  * @param {int} it Iteration count
  * @return {boolean} true if all tests pass, false otherwise
  */
-function testSchnorr(it=5) {
+function testSchnorr(it=5, resultMap) {
+  const times = new Map([
+    ['Schnorr Challenge', []],
+    ['Schnorr Response', []],
+    ['Schnorr Verify', []]
+  ]);
   const G = new PrimeGroup();
   const secret = G.randomExponent();
   for (let i = 1; i <= it; i++) {
-    console.time('Schnorr test #' + i);
+    var t0 = performance.now();
     const c = schnorrChallenge(G);
+    var t1 = performance.now();
+    const challengeTime = (t1 - t0);
+    t0 = performance.now();
     var resp = schnorrResponse(secret, c, G);
+    t1 = performance.now();
+    const responseTime = (t1 - t0);
+    t0 = performance.now();
     const result =  schnorrVerify(resp[0], resp[1], resp[2], c, G);
-    console.timeEnd('Schnorr test #' + i);
+    t1 = performance.now();
+    const verifyTime = (t1 - t0);
+    times.get('Schnorr Challenge').push(challengeTime);
+    times.get('Schnorr Response').push(responseTime);
+    times.get('Schnorr Verify').push(verifyTime);
     if (result) continue;
     printError('Schnorr test #' + i + ' failed.');
     return false;
   }
-  return true;
+  print('Schnorr tests successful.');
+  if (!resultMap)
+    return times;
+  for (const [key, value] of times) {
+    resultMap.set(key, value);
+  }
+  return resultMap;
 }
 
 /**
@@ -174,49 +227,63 @@ function timeFunction(fun, params, it) {
  * @param {boolean} lambdas Whether the lambdas are precalculated by servers
  * @return {Promise<boolean>} Whether the tests are successful
  */
-async function testTOPRF(secret, n, t, it, lambdas=false) {
-  // TODO: Lambda precalculation should be 'pre' calculation...
+async function testTOPRF(n, t, it, lambdas=false, resultMap) {
+  const times = new Map([
+    [`t-OPRF Mask (${n}, ${t}, ${lambdas})`, []],
+    [`t-OPRF Challenge Total (${n}, ${t}, ${lambdas})`, []],
+    [`t-OPRF Response (${n}, ${t}, ${lambdas})`, []]
+  ]);
   const G = new PrimeGroup();
-  console.time('t-OPRF tests with'+
-    (lambdas ? '' : 'out')+
-    ' lambdas pre-calculated');
+  const secret = 'This is some very secret message '+
+      'sent over a secure channel.';
   let Hp_x = await hashPrime(secret, G);
   Hp_x = new BigIntegerAdapter(Hp_x, 16);
   for (let i = 1; i <= it; i++) {
-    console.time('t-OPRF test #' + i + ': n=' + n*i + ', t=' + t*i);
     const key = G.randomExponent();
     const result = Hp_x.powMod(key, G.modulus);
-    const keys = shamirGenShares(key, n*i, t*i, G).slice(0, t*i);
+    const keys = shamirGenShares(key, n, t, G).slice(0, t);
     if (VERBOSE) { // May help reduce a loop
       printVerbose('Generated key shares:');
       for (const key_i of keys) {
         printVerbose('\tKey #' + key_i[0] + ': ' + key_i[1].toString());
       }
     }
+    var t0 = performance.now();
     const [ro, alpha] = await oprfMask(secret, G);
+    var t1 = performance.now();
+    const maskTime = (t1 - t0);
     const betas = [];
+    var challengeTime = 0;
     for (let i = 1; i <= keys.length; i++) {
       const key_i = keys[i-1];
+      t0 = performance.now();
       const beta_i = [key_i[0], await oprfChallenge(alpha, key_i[1], G)];
+      t1 = performance.now();
+      challengeTime += (t1 - t0);
       if (lambdas) beta_i.push(calculateLambda(i, keys.length, G.order));
       betas.push(beta_i);
     }
+    t0 = performance.now();
     const resp = await oprfResponse(betas, ro, G);
+    t1 = performance.now();
+    const responseTime = (t1 - t0);
     const check = result.eqMod(resp, G.modulus);
-    console.timeEnd('t-OPRF test #' + i + ': n=' + n*i + ', t=' + t*i);
+    times.get(`t-OPRF Mask (${n}, ${t}, ${lambdas})`).push(maskTime);
+    times.get(`t-OPRF Challenge Total (${n}, ${t}, ${lambdas})`).push(challengeTime);
+    times.get(`t-OPRF Response (${n}, ${t}, ${lambdas})`).push(responseTime);
     if (check) continue;
-    printError('t-OPRFtests failed at n=' + n*i + ', t=' + t*i);
+    printError(`t-OPRF test (${n}, ${t}, ${lambdas}) #${i} failed`);
     printError('Result:\n' + result.toString());
     printError('Response:\n' + resp.toString());
-    console.timeEnd('t-OPRF tests with'+
-      (lambdas ? '' : 'out')+
-      ' lambdas pre-calculated');
     return false;
   }
-  console.timeEnd('t-OPRF tests with'+
-    (lambdas ? '' : 'out')+
-    ' lambdas pre-calculated');
-  return true;
+  print(`t-OPRF tests (${n}, ${t}, ${lambdas}) successful.`);
+  if (!resultMap)
+    return times;
+  for (const [key, value] of times) {
+    resultMap.set(key, value);
+  }
+  return resultMap;
 }
 
 /**
@@ -225,27 +292,53 @@ async function testTOPRF(secret, n, t, it, lambdas=false) {
  * @param {string} secret Client input
  * @return {Promise<boolean>} Whether the tests are successful
  */
-async function testOPRF(secret) {
-  printDebug('Testing OPRF.', color='orange');
+async function testOPRF(it=5, resultMap) {
+  const times = new Map([
+    ['OPRF Mask', []],
+    ['OPRF Challenge', []],
+    ['OPRF Response', []]
+  ]);
   const G = new PrimeGroup();
-  console.time('OPRF test');
+  const secret = 'This is some very secret message '+
+      'sent over a secure channel.';
   let Hp_x = await hashPrime(secret, G);
   Hp_x = new BigIntegerAdapter(Hp_x, 16);
-  const key = G.randomExponent();
-  const result = Hp_x.powMod(key, G.modulus);
-  const [ro, alpha] = await oprfMask(secret, G);
-  const beta = await oprfChallenge(alpha, key, G);
-  const resp = await oprfResponse(beta, ro, G);
-  const check = result.eqMod(resp, G.modulus);
-  console.timeEnd('OPRF test');
-
-  printVerbose(`key: ${key.toString()} \n`);
-  printVerbose(`result: ${result.toString()} \n`);
-  printVerbose(`ro: ${ro.toString()} \n`);
-  printVerbose(`alpha: ${alpha.toString()} \n`);
-  printVerbose(`beta: ${beta.toString()} \n`);
-  printVerbose(`resp: ${resp.toString()} \n`);
-  return check;
+  for (let i = 1; i <= it; i++) {
+    const key = G.randomExponent();
+    const result = Hp_x.powMod(key, G.modulus);
+    var t0 = performance.now();
+    const [ro, alpha] = await oprfMask(secret, G);
+    var t1 = performance.now();
+    const maskTime = (t1 - t0);
+    t0 = performance.now();
+    const beta = await oprfChallenge(alpha, key, G);
+    t1 = performance.now();
+    const challengeTime = (t1 - t0);
+    t0 = performance.now();
+    const resp = await oprfResponse(beta, ro, G);
+    t1 = performance.now();
+    const responseTime = (t1 - t0);
+    const check = result.eqMod(resp, G.modulus);
+    times.get('OPRF Mask').push(maskTime);
+    times.get('OPRF Challenge').push(challengeTime);
+    times.get('OPRF Response').push(responseTime);
+    if (check) continue
+    printError('OPRF test #' + i + ' failed.')
+    printVerbose(`key: ${key.toString(16)} \n`);
+    printVerbose(`result: ${result.toString(16)} \n`);
+    printVerbose(`ro: ${ro.toString(16)} \n`);
+    printVerbose(`alpha: ${alpha.toString(16)} \n`);
+    printVerbose(`beta: ${beta.toString(16)} \n`);
+    printVerbose(`resp: ${resp.toString(16)} \n`);
+    return false;
+  }
+  print('OPRF tests successful.');
+  if (!resultMap)
+    return times;
+  for (const [key, value] of times) {
+    resultMap.set(key, value);
+  }
+  return resultMap;
 }
 
 /**
@@ -254,19 +347,19 @@ async function testOPRF(secret) {
  * @param {[int]} bucketThresholds 
  * @param {int} it Iteration count 
  */
-function testCompartmented(bucketSizes, bucketThresholds, it) {
+function testCompartmented(bucketSizes, bucketThresholds, it, resultMap) {
+  const times = new Map([
+    [`Compartmented SS Generate ([${bucketSizes}], [${bucketThresholds}])`, []],
+    [`Compartmented SS Combine ([${bucketSizes}], [${bucketThresholds}])`, []],
+  ]);
   const G = new PrimeGroup();
-  console.time('Compartmented tests');
   for (let i = 1; i <= it; i++) {
-    const [newSizes, newThresholds] = [bucketSizes.slice(), bucketThresholds.slice()];
-    for (let j = 0; j < newSizes.length; j++) {
-      newSizes[j] *= i;
-      newThresholds[j] *= i;
-    }
-    console.time('Compartmented test #' + i);
     const secret = G.randomExponent(); // ! Be careful with this
-    const compShares = compartmentedGenShares(secret, newSizes,
-      newThresholds, G);
+    var t0 = performance.now();
+    const compShares = compartmentedGenShares(secret, bucketSizes,
+      bucketThresholds, G);
+    var t1 = performance.now();
+    const genTime = (t1 - t0);
     if (VERBOSE) { // This redundant check may reduce unnecessary loops
       printVerbose('Generated shares:');
       compShares.forEach(function(shares, compartment) {
@@ -276,21 +369,29 @@ function testCompartmented(bucketSizes, bucketThresholds, it) {
         });
       });
     }
+    var t0 = performance.now();
     const recons = compartmentedCombineShares(compShares, G);
-    console.timeEnd('Compartmented test #' + i);
+    var t1 = performance.now();
+    const combineTime = (t1 - t0);
     printVerbose('Secret reconstructed:');
     printVerbose('\tOriginal secret: ' + secret.toString(16));
     printVerbose('\tReconstructed secret: ' + recons.toString(16));
     const check = secret.eqMod(recons, G.order);
+    times.get(`Compartmented SS Generate ([${bucketSizes}], [${bucketThresholds}])`).push(genTime);
+    times.get(`Compartmented SS Combine ([${bucketSizes}], [${bucketThresholds}])`).push(combineTime);
     if (check) continue;
-    console.timeEnd('Compartmented tests');
-    printError('Compartmented Secret Sharing test #' + i + ' failed');
+    printError(`Compartmented SS test ([${bucketSizes}], [${bucketThresholds})] #${i} failed`);
     printError('Secret:\n' + secret.toString(16));
     printError('Recons:\n' + recons.toString(16));
     return false;
   }
-  console.timeEnd('Compartmented tests');
-  return true;
+  print(`Compartmented SS tests ([${bucketSizes}], [${bucketThresholds}]) successful.`);
+  if (!resultMap)
+    return times;
+  for (const [key, value] of times) {
+    resultMap.set(key, value);
+  }
+  return resultMap;
 }
 
 /**
