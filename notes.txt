@@ -5,11 +5,11 @@ The following tests are completed:
 	t-OPRF
 	OPRF
 	Compartmented SS
+	Shamir SS (not with lambdas precalculated)
 
 The following functionality exists:
 	PrimeGroup
 	Polynomials
-	Shamir SS
 
 Does not work:
 	t-OPRF precalculation of lambdas

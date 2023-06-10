@@ -17,6 +17,7 @@ async function main() {
   await testTOPRF(5, 3, 5, false, times);
   await testOPRF(5, times);
   testCompartmented([5, 3, 5, 4], [3, 2, 4, 4], 5, times);
+  testShamir(5, 3, 5, true, times);
   print(times);
 }
 
@@ -399,21 +400,25 @@ function testCompartmented(bucketSizes, bucketThresholds, it, resultMap) {
  * @param {int} n Share count
  * @param {int} t Threhsold
  * @param {int} it Iteration count
- * @param {boolean} exponent Whether Shamir is done on exponents
+ * @param {boolean?} exponent Whether Shamir is done on exponents
+ * @param {Map} resultMap Map object holding previous tests results
  * @return {boolean} Whether the tests are successful
  */
-function testShamir(n, t, it, exponent=false) {
+function testShamir(n, t, it, exponent=false, resultMap) {
   // TODO: Test with lambdas pre-calculated
+  const times = new Map([
+    [`Shamir SS Generate (${n}, ${t}) on ` + (exponent ? 'exponent':'base'), []],
+    [`Shamir SS Combine (${n}, ${t}) on `+ (exponent ? 'exponent':'base'), []],
+  ]);
   const G = new PrimeGroup();
   const modulus = G.modulus;
   const order = G.order;
-  console.time('Shamir tests');
   for (let i = 1; i <= it; i++) {
-    console.time('Shamir test on '+
-      (exponent ? 'exponent' : 'base')+
-      ' #' + i + ': n=' + n*i + ', t=' + t*i);
     const secret = G.randomExponent();
-    const shares = shamirGenShares(secret, n*i, t*i, G);
+    var t0 = performance.now();
+    const shares = shamirGenShares(secret, n, t, G);
+    var t1 = performance.now();
+    const genTime = (t1 - t0);
     if (VERBOSE) { // This redundant check may reduce unnecessary loops
       printVerbose('Generated shares:');
       for (const share of shares) {
@@ -428,26 +433,32 @@ function testShamir(n, t, it, exponent=false) {
         share[1] = elm.powMod(share[1], modulus);
       }
     }
-    const recons = shamirCombineShares(shares.slice(0, t*i), G, exponent);
-    console.timeEnd('Shamir test on '+
-    (exponent ? 'exponent' : 'base')+
-    ' #' + i + ': n=' + n*i + ', t=' + t*i);
+    t0 = performance.now();
+    const recons = shamirCombineShares(shares.slice(0, t), G, exponent);
+    t1 = performance.now();
+    const combineTime = (t1 - t0); 
     printVerbose('Secret reconstructed:');
     printVerbose('\tOriginal secret: ' + secret.toString(16));
     printVerbose('\tReconstructed secret: ' + recons.toString(16));
     const check = exponent ?
       secret_elm.eqMod(recons, modulus) : secret.eqMod(recons, order);
+    times.get(`Shamir SS Generate (${n}, ${t}) on ` + (exponent ? 'exponent':'base')).push(genTime);
+    times.get(`Shamir SS Combine (${n}, ${t}) on `+ (exponent ? 'exponent':'base')).push(combineTime);
     if (check) continue;
-	  console.timeEnd('Shamir tests');
-    printError('Shamir\'s Secret Sharing tests on '+
-      (exponent ? 'exponent' : 'base')+
-      ' failed at n=' + n*i + ', t=' + t*i);
+    printError(`Shamir SS Generate (${n}, ${t}) on ` + (exponent ? 'exponent':'base')+
+     ' test #' + i + ' failed.')
     printError('Secret:\n' + secret.toString(16));
     printError('Recons:\n' + recons.toString(16));
     return false;
   }
-  console.timeEnd('Shamir tests');
-  return true;
+  print(`Shamir SS (${n}, ${t}) on ` + (exponent ? 'exponent':'base')+
+  ' tests successful.')
+  if (!resultMap)
+    return times;
+  for (const [key, value] of times) {
+    resultMap.set(key, value);
+  }
+  return resultMap;
 }
 
 /**
@@ -777,7 +788,7 @@ function shamirCombineShares(shares, group, exponent=false) {
  * @param {int} n Share count
  * @param {int} t Threhsold
  * @param {PrimeGroup} group The group in which the operations are done 
- * @return {[(int, BigIntegerAdapter)]} The shares that uniquely determine the
+ * @return {[[int, BigIntegerAdapter]]} The shares that uniquely determine the
  * secret. Each share is a tuple of (int, BigIntegerAdapter)
  */
 function shamirGenShares(secret, n, t, group) {
