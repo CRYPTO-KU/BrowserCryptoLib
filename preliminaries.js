@@ -3,6 +3,7 @@
 // * Note: DEBUG and VERBOSE options may slightly reduce performance.
 const DEBUG = false;
 const VERBOSE = false;
+const FOLDER_PATH = 'TSPA-Crypto-Tests'
 // TODO: Standardize Debug and Verbose printing (Debug starting, ending. Verbose values.)
 // TODO: Remove redundant if(VERBOSE) checks, they are no longer counted in the performance.
 // TODO: Exceptions and handling before release
@@ -11,8 +12,8 @@ const VERBOSE = false;
 // eslint-disable-next-line require-jsdoc
 async function main() {
   const times = await testAll(50);
-  const filename = 'TSPA-Crypto-Tests/results.csv';
-  print(exportToCSV(times, filename, false));
+  const filename = FOLDER_PATH + '/raw results.csv';
+  exportToCSV(times, filename, false);
 }
 
 async function testAll(it) {
@@ -69,8 +70,8 @@ async function testSignature(it=5, resultMap) {
 // TODO: Documentation here and above
 async function testEncryption(it=5, resultMap) {
   const times = new Map([
-    ['encrypt', []],
-    ['decrypt', []]
+    ['Encrypt', []],
+    ['Decrypt', []]
   ]);
   for (let i = 1; i <= it; i++) {
     const plaintext = BigIntegerAdapter.randomLen(256);
@@ -87,8 +88,8 @@ async function testEncryption(it=5, resultMap) {
       hashFunction, pbkdfIterations, salt, counter);
     t1 = performance.now();
     const decryptTime = (t1 - t0);
-    times.get('encrypt').push(encryptTime);
-    times.get('decrypt').push(decryptTime);
+    times.get('Encrypt').push(encryptTime);
+    times.get('Decrypt').push(decryptTime);
     if (decrypted == plaintext.toString(16))
       continue
     printError('Decryption test #' + i +' failed.');
