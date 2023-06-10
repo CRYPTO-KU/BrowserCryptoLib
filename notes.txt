@@ -5,7 +5,7 @@ The following tests are completed:
 	t-OPRF
 	OPRF
 	Compartmented SS
-	Shamir SS (not with lambdas precalculated)
+	Shamir SS
 
 The following functionality exists:
 	PrimeGroup
@@ -13,6 +13,7 @@ The following functionality exists:
 
 Does not work:
 	t-OPRF precalculation of lambdas
+	Shamir precalculation of lambdas
 
 Needs testing:
 

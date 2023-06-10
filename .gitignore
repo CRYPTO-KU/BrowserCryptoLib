@@ -131,3 +131,6 @@ dmypy.json
 # Test files
 test.js
 test.html
+
+# Result files
+results.csv

@@ -10,15 +10,21 @@ const VERBOSE = false;
 // TODO: Write proper tests.
 // eslint-disable-next-line require-jsdoc
 async function main() {
-  const times = await testSignature(5);
-  await testEncryption(5, times);
-  testSchnorr(5, times);
-  await testTOPRF(3, 2, 5, false, times);
-  await testTOPRF(5, 3, 5, false, times);
-  await testOPRF(5, times);
-  testCompartmented([5, 3, 5, 4], [3, 2, 4, 4], 5, times);
-  testShamir(5, 3, 5, true, times);
-  print(times);
+  const times = await testAll(50);
+  const filename = 'TSPA-Crypto-Tests/results.csv';
+  print(exportToCSV(times, filename, false));
+}
+
+async function testAll(it) {
+  const times = await testSignature(it);
+  await testEncryption(it, times);
+  testSchnorr(it, times);
+  await testTOPRF(3, 2, it, false, times);
+  await testTOPRF(5, 3, it, false, times);
+  await testOPRF(it, times);
+  testCompartmented([5, 3, 5, 4], [3, 2, 4, 4], it, times);
+  testShamir(5, 3, it, true, times);
+  return times;
 }
 
 async function testSignature(it=5, resultMap) {
@@ -1344,6 +1350,48 @@ class BigIntegerAdapter {
 }
 // --- Classes end ---
 // --- Some helpful functions ---
+/**
+ * Writes a Map object into a CSV file.
+ * @param {Map} map 
+ * @param {string} filename
+ * @param {boolean} append
+ */
+function exportToCSV(map, filename, append=false) {
+  const fs = require('fs');
+  const keys = Array.from(map.keys());
+  const vals = Array.from(map.values());
+  var fd;
+  const sep = ';';
+  var success = true;
+  try {
+    fd = append ? fs.openSync(filename, 'a') : fs.openSync(filename, 'w');
+    var row = '';
+    if (!append) {
+      for (const key of keys) {
+        row += key + sep;
+      }
+      row = row.slice(0, row.length-1) + '\n';
+      fs.appendFileSync(fd, row, 'utf8');
+    }
+    for (let i = 0; i < vals[0].length; i++) {
+      row = '';
+      for (const val of vals) {
+        row += val[i] + sep;
+      }
+      row = row.slice(0, row.length-1) + '\n';
+      fs.appendFileSync(fd, row, 'utf8');
+    }
+  } catch (err) {
+    printError('Writing to CSV unsuccessful.')
+    printError(err);
+    success = false;
+  } finally {
+    if (fd !== undefined)
+      fs.closeSync(fd);
+    return success;
+  }
+}
+
 function importCrypto() {
   let Crypto;
   if (typeof require !== 'undefined' && require.main === module) {
