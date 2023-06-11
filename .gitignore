@@ -25,6 +25,7 @@ share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+.eslintrc.js
 MANIFEST
 
 # PyInstaller
@@ -134,3 +135,6 @@ test.html
 
 # Result files
 *results.csv
+
+# PDFs
+*.pdf
