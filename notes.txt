@@ -13,7 +13,6 @@ The following functionality exists:
 
 Does not work:
 	t-OPRF precalculation of lambdas
-	Shamir precalculation of lambdas
 
 Needs testing:
 

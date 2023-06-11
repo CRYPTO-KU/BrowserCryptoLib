@@ -11,9 +11,10 @@ const FOLDER_PATH = 'TSPA-Crypto-Tests'
 // TODO: Write proper tests.
 // eslint-disable-next-line require-jsdoc
 async function main() {
-  const times = await testAll(50);
-  const filename = FOLDER_PATH + '/raw results.csv';
-  exportToCSV(times, filename, false);
+  // const times = await testAll(50);
+  // const filename = FOLDER_PATH + '/raw results.csv';
+  // exportToCSV(times, filename, false);
+
 }
 
 async function testAll(it) {
@@ -411,11 +412,13 @@ function testCompartmented(bucketSizes, bucketThresholds, it, resultMap) {
  * @param {Map} resultMap Map object holding previous tests results
  * @return {boolean} Whether the tests are successful
  */
-function testShamir(n, t, it, exponent=false, resultMap) {
+function testShamir(n, t, it, exponent=false, lambdas=false, resultMap) {
   // TODO: Test with lambdas pre-calculated
+  const messageTrail = `(${n}, ${t}) on ` + (exponent ? 'exponent':'base')+
+  (lambdas ? '(lambdas pre-calculated)' : '');
   const times = new Map([
-    [`Shamir SS Generate (${n}, ${t}) on ` + (exponent ? 'exponent':'base'), []],
-    [`Shamir SS Combine (${n}, ${t}) on `+ (exponent ? 'exponent':'base'), []],
+    ['Shamir SS Generate' + messageTrail, []],
+    ['Shamir SS Combine' + messageTrail, []],
   ]);
   const G = new PrimeGroup();
   const modulus = G.modulus;
@@ -440,6 +443,11 @@ function testShamir(n, t, it, exponent=false, resultMap) {
         share[1] = elm.powMod(share[1], modulus);
       }
     }
+    if (lambdas) {
+      for (const point of shares) {
+        point.push(calculateLambda(point[0], t, G.order));
+      }
+    }
     t0 = performance.now();
     const recons = shamirCombineShares(shares.slice(0, t), G, exponent);
     t1 = performance.now();
@@ -449,17 +457,15 @@ function testShamir(n, t, it, exponent=false, resultMap) {
     printVerbose('\tReconstructed secret: ' + recons.toString(16));
     const check = exponent ?
       secret_elm.eqMod(recons, modulus) : secret.eqMod(recons, order);
-    times.get(`Shamir SS Generate (${n}, ${t}) on ` + (exponent ? 'exponent':'base')).push(genTime);
-    times.get(`Shamir SS Combine (${n}, ${t}) on `+ (exponent ? 'exponent':'base')).push(combineTime);
+    times.get('Shamir SS Generate' + messageTrail).push(genTime);
+    times.get('Shamir SS Combine' + messageTrail).push(combineTime);
     if (check) continue;
-    printError(`Shamir SS Generate (${n}, ${t}) on ` + (exponent ? 'exponent':'base')+
-     ' test #' + i + ' failed.')
+    printError('Shamir SS' + messageTrail + ' test #' + i + ' failed.');
     printError('Secret:\n' + secret.toString(16));
     printError('Recons:\n' + recons.toString(16));
     return false;
   }
-  print(`Shamir SS (${n}, ${t}) on ` + (exponent ? 'exponent':'base')+
-  ' tests successful.')
+  print('Shamir SS' + messageTrail + ' tests successful.');
   if (!resultMap)
     return times;
   for (const [key, value] of times) {
