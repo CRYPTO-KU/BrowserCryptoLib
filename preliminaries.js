@@ -769,6 +769,8 @@ function compartmentedCombineShares(shares, group) {
  * Pass lambdas as the third elements of shares if they are
  * precomputed, i.e., shares[i] = [x_i, y_i, lambda_i]. Otherwise
  * pass each share as tuples, i.e., shares[i] = [x_i, y_i].
+ * IMPORTANT: During the pre-calculation of lambdas make sure
+ * to use share count for interpolation, do not default to n.
  *
  * @param {[(int, BigIntegerAdapter)]} shares A vector of shares 
  * where each share is of the form [int, BigIntegerAdapter, BigIntegerAdapter?],
@@ -818,13 +820,13 @@ function shamirGenShares(secret, n, t, group) {
 /**
  * Calculates the Lagrange interpolation coefficient for x = i and x_0 = 0.
  * @param {int} i Point x
- * @param {int} n Share number
+ * @param {int} shareCount Share number
  * @param {BigIntegerAdapter} order Modulus of operations
  * @return {int} Lagrange Interpolation Coefficient Lambda_i
  */
-function calculateLambda(i, n, order) {
+function calculateLambda(i, shareCount, order) {
   lambda_i = new BigIntegerAdapter(1);
-  for (let j = 1; j <= n; j++) {
+  for (let j = 1; j <= shareCount; j++) {
     if (i == j) continue;
     const inv = (new BigIntegerAdapter(j-i)).invMod(order); // 1/j-i
     const temp = inv.mulMod(j, order); // j/j-i
