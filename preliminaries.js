@@ -11,21 +11,23 @@ const FOLDER_PATH = 'TSPA-Crypto-Tests'
 // TODO: Write proper tests.
 // eslint-disable-next-line require-jsdoc
 async function main() {
-  // const times = await testAll(50);
-  // const filename = FOLDER_PATH + '/raw results.csv';
-  // exportToCSV(times, filename, false);
-
+  const times = await testAll(3);
+  const filename = FOLDER_PATH + '/raw results.csv';
+  exportToCSV(times, filename, false);
 }
 
 async function testAll(it) {
   const times = await testSignature(it);
   await testEncryption(it, times);
   testSchnorr(it, times);
-  await testTOPRF(3, 2, it, false, times);
-  await testTOPRF(5, 3, it, false, times);
   await testOPRF(it, times);
+  await testTOPRF(11, 6, it, false, times);
+  await testTOPRF(13, 7, it, true, times);
   testCompartmented([5, 3, 5, 4], [3, 2, 4, 4], it, times);
-  testShamir(5, 3, it, true, times);
+  testShamir(11, 6, it, false, false, times);
+  testShamir(11, 6, it, false, true, times);
+  testShamir(11, 6, it, true, false, times);
+  testShamir(11, 6, it, true, true, times);
   return times;
 }
 
@@ -229,7 +231,6 @@ function timeFunction(fun, params, it) {
 
 /**
  * Tests t-OPRF. Randomly generates key.
- * @param {string} secret Client input
  * @param {int} n Share count
  * @param {int} t Threshold
  * @param {int} it Iteration count
@@ -263,14 +264,13 @@ async function testTOPRF(n, t, it, lambdas=false, resultMap) {
     const maskTime = (t1 - t0);
     const betas = [];
     var challengeTime = 0;
-    for (let i = 1; i <= keys.length; i++) {
-      const key_i = keys[i-1];
+    for (const key of keys) {
       t0 = performance.now();
-      const beta_i = [key_i[0], await oprfChallenge(alpha, key_i[1], G)];
+      const beta_i = [key[0], await oprfChallenge(alpha, key[1], G)];
       t1 = performance.now();
       challengeTime += (t1 - t0);
-      if (lambdas) beta_i.push(calculateLambda(i, keys.length, G.order));
-      betas.push(beta_i);
+      if (lambdas) beta_i.push(calculateLambda(beta_i[0], keys.length, G.order));
+      betas.push(beta_i)
     }
     t0 = performance.now();
     const resp = await oprfResponse(betas, ro, G);
@@ -772,7 +772,7 @@ function compartmentedCombineShares(shares, group) {
  * IMPORTANT: During the pre-calculation of lambdas make sure
  * to use share count for interpolation, do not default to n.
  *
- * @param {[(int, BigIntegerAdapter)]} shares A vector of shares 
+ * @param {[[int, BigIntegerAdapter]]} shares A vector of shares 
  * where each share is of the form [int, BigIntegerAdapter, BigIntegerAdapter?],
  * corresponding to [shareIndex, shareValue, shareLambda]. shareLambda
  * is only input when lambdas are pre-calculated.
@@ -782,7 +782,7 @@ function compartmentedCombineShares(shares, group) {
  * @return {BigIntegerAdapter} The reconstructed secret
  */
 function shamirCombineShares(shares, group, exponent=false) {
-  const n = shares.length;
+  const shareCount = shares.length;
   const mod = group.modulus;
   const ord = group.order;
   var at_0 = exponent ? new BigIntegerAdapter(1) : new BigIntegerAdapter(0);
@@ -790,7 +790,7 @@ function shamirCombineShares(shares, group, exponent=false) {
   for (const point of shares) {
     const i = point[0]; // int, not bigInt
     const at_i = point[1];
-    const lambda_i = lambdas ? point[2] : calculateLambda(i, n, ord);
+    const lambda_i = lambdas ? point[2] : calculateLambda(i, shareCount, ord);
     if (exponent) at_0 = at_0.mulMod(at_i.powMod(lambda_i, mod), mod);
     else at_0 = at_0.addMod(at_i.mulMod(lambda_i, ord), ord);
   }
@@ -885,15 +885,15 @@ function evalPol(pol, x, group) {
  */
 async function oprfResponse(betas, ro, group) {
   const threshold = !(betas instanceof BigIntegerAdapter);
-  const lambdas = threshold && betas[0].length == 3;
   // betas is actually a single beta in the below case
   if (!threshold) return betas.powMod(ro.invMod(group.order), group.modulus);
+  const lambdas = betas[0].length == 3;
   const shares = [];
   for (const beta of betas) {
     const index = beta[0];
     const toRoInv = await oprfResponse(beta[1], ro, group);
     const share = [index, toRoInv];
-    if (lambdas) share.push(betas[2]);
+    if (lambdas) share.push(beta[2]);
     shares.push(share);
   }
   return shamirCombineShares(shares, group, true);

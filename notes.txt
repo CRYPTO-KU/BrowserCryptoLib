@@ -12,7 +12,6 @@ The following functionality exists:
 	Polynomials
 
 Does not work:
-	t-OPRF precalculation of lambdas
 
 Needs testing:
 
