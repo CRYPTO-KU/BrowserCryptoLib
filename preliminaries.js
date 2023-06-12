@@ -11,9 +11,13 @@ const FOLDER_PATH = 'TSPA-Crypto-Tests'
 // TODO: Write proper tests.
 // eslint-disable-next-line require-jsdoc
 async function main() {
-  const times = await testAll(3);
+  const times = await testAll(50);
   const filename = FOLDER_PATH + '/raw results.csv';
-  exportToCSV(times, filename, false);
+  const append = false;
+  if(exportToCSV(times, filename, append))
+    print('Results ' + (append ? 'appended' : 'recorded') + ` to ${filename}.`);
+  else
+    print('Error exporting to CSV.');
 }
 
 async function testAll(it) {
@@ -238,10 +242,11 @@ function timeFunction(fun, params, it) {
  * @return {Promise<boolean>} Whether the tests are successful
  */
 async function testTOPRF(n, t, it, lambdas=false, resultMap) {
+  const messageTrail = `(${n}, ${t}, ${lambdas})`;
   const times = new Map([
-    [`t-OPRF Mask (${n}, ${t}, ${lambdas})`, []],
-    [`t-OPRF Challenge Total (${n}, ${t}, ${lambdas})`, []],
-    [`t-OPRF Response (${n}, ${t}, ${lambdas})`, []]
+    ['t-OPRF Mask ' + messageTrail, []],
+    ['t-OPRF Challenge Total ' + messageTrail, []],
+    ['t-OPRF Response ' + messageTrail, []]
   ]);
   const G = new PrimeGroup();
   const secret = 'This is some very secret message '+
@@ -277,16 +282,16 @@ async function testTOPRF(n, t, it, lambdas=false, resultMap) {
     t1 = performance.now();
     const responseTime = (t1 - t0);
     const check = result.eqMod(resp, G.modulus);
-    times.get(`t-OPRF Mask (${n}, ${t}, ${lambdas})`).push(maskTime);
-    times.get(`t-OPRF Challenge Total (${n}, ${t}, ${lambdas})`).push(challengeTime);
-    times.get(`t-OPRF Response (${n}, ${t}, ${lambdas})`).push(responseTime);
+    times.get('t-OPRF Mask ' + messageTrail).push(maskTime);
+    times.get('t-OPRF Challenge Total ' + messageTrail).push(challengeTime);
+    times.get('t-OPRF Response ' + messageTrail).push(responseTime);
     if (check) continue;
-    printError(`t-OPRF test (${n}, ${t}, ${lambdas}) #${i} failed`);
+    printError('t-OPRF test ' + messageTrail + ` #${i} failed`);
     printError('Result:\n' + result.toString());
     printError('Response:\n' + resp.toString());
     return false;
   }
-  print(`t-OPRF tests (${n}, ${t}, ${lambdas}) successful.`);
+  print('t-OPRF tests ' + messageTrail + ' successful.');
   if (!resultMap)
     return times;
   for (const [key, value] of times) {
@@ -357,9 +362,10 @@ async function testOPRF(it=5, resultMap) {
  * @param {int} it Iteration count 
  */
 function testCompartmented(bucketSizes, bucketThresholds, it, resultMap) {
+  const messageTrail = `([${bucketSizes}], [${bucketThresholds}])`;
   const times = new Map([
-    [`Compartmented SS Generate ([${bucketSizes}], [${bucketThresholds}])`, []],
-    [`Compartmented SS Combine ([${bucketSizes}], [${bucketThresholds}])`, []],
+    ['Compartmented SS Generate ' + messageTrail, []],
+    ['Compartmented SS Combine ' + messageTrail, []],
   ]);
   const G = new PrimeGroup();
   for (let i = 1; i <= it; i++) {
@@ -386,15 +392,15 @@ function testCompartmented(bucketSizes, bucketThresholds, it, resultMap) {
     printVerbose('\tOriginal secret: ' + secret.toString(16));
     printVerbose('\tReconstructed secret: ' + recons.toString(16));
     const check = secret.eqMod(recons, G.order);
-    times.get(`Compartmented SS Generate ([${bucketSizes}], [${bucketThresholds}])`).push(genTime);
-    times.get(`Compartmented SS Combine ([${bucketSizes}], [${bucketThresholds}])`).push(combineTime);
+    times.get('Compartmented SS Generate ' + messageTrail).push(genTime);
+    times.get('Compartmented SS Combine ' + messageTrail).push(combineTime);
     if (check) continue;
-    printError(`Compartmented SS test ([${bucketSizes}], [${bucketThresholds})] #${i} failed`);
+    printError('Compartmented SS test ' + messageTrail + ` #${i} failed`);
     printError('Secret:\n' + secret.toString(16));
     printError('Recons:\n' + recons.toString(16));
     return false;
   }
-  print(`Compartmented SS tests ([${bucketSizes}], [${bucketThresholds}]) successful.`);
+  print('Compartmented SS tests ' + messageTrail + ' successful.');
   if (!resultMap)
     return times;
   for (const [key, value] of times) {
@@ -417,8 +423,8 @@ function testShamir(n, t, it, exponent=false, lambdas=false, resultMap) {
   const messageTrail = `(${n}, ${t}) on ` + (exponent ? 'exponent':'base')+
   (lambdas ? '(lambdas pre-calculated)' : '');
   const times = new Map([
-    ['Shamir SS Generate' + messageTrail, []],
-    ['Shamir SS Combine' + messageTrail, []],
+    ['Shamir SS Generate ' + messageTrail, []],
+    ['Shamir SS Combine ' + messageTrail, []],
   ]);
   const G = new PrimeGroup();
   const modulus = G.modulus;
@@ -457,15 +463,15 @@ function testShamir(n, t, it, exponent=false, lambdas=false, resultMap) {
     printVerbose('\tReconstructed secret: ' + recons.toString(16));
     const check = exponent ?
       secret_elm.eqMod(recons, modulus) : secret.eqMod(recons, order);
-    times.get('Shamir SS Generate' + messageTrail).push(genTime);
-    times.get('Shamir SS Combine' + messageTrail).push(combineTime);
+    times.get('Shamir SS Generate ' + messageTrail).push(genTime);
+    times.get('Shamir SS Combine ' + messageTrail).push(combineTime);
     if (check) continue;
-    printError('Shamir SS' + messageTrail + ' test #' + i + ' failed.');
+    printError('Shamir SS ' + messageTrail + ' test #' + i + ' failed.');
     printError('Secret:\n' + secret.toString(16));
     printError('Recons:\n' + recons.toString(16));
     return false;
   }
-  print('Shamir SS' + messageTrail + ' tests successful.');
+  print('Shamir SS ' + messageTrail + ' tests successful.');
   if (!resultMap)
     return times;
   for (const [key, value] of times) {
