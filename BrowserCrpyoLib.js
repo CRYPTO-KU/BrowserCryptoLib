@@ -328,7 +328,7 @@ function testCompartmented(bucketSizes, bucketThresholds, it, resultMap) {
   ]);
   const G = new PrimeGroup();
   for (let i = 1; i <= it; i++) {
-    const secret = G.randomExponent(); // ! Be careful with this
+    const secret = G.randomExponent();
     var t0 = performance.now();
     const compShares = compartmentedGenShares(secret, bucketSizes,
       bucketThresholds, G);
@@ -765,16 +765,15 @@ function schnorrVerify(X, Y, z, c, group) {
 // --- Secret Sharing functions ---
 /**
  * Generates shares from a secret according to Compartmented
- * Secret Sharing as presented in INSERT LINK HERE
+ * Secret Sharing as presented in https://eprint.iacr.org/2005/408.pdf
  * Each compartment (bucket) has a threshold of its own,
  * allowing for an access control mechanism.
  * @param {BigIntegerAdapter} secret Secret to divide into shares
- * @param {[int]} bucketSizes Sizes of each compartment
- * @param {[int]} bucketThresholds Thresholds of each compartment
+ * @param {[int]} bucketSizes Sizes of compartments
+ * @param {[int]} bucketThresholds Thresholds of compartments
  * @param {PrimeGroup} group The group in which the operations are done
- * @return {[[(int, BigIntegerAdapter)]]} Each element corresponds to the shares
- * of compartment i. Element j of compartment i should get the share
- * shares[i][j].
+ * @return {[[(int, BigIntegerAdapter)]]} Shares of compartments. Share
+ * j of compartment i corresponds to shares[i][j].
  */
 function compartmentedGenShares(secret, bucketSizes, bucketThresholds, group) {
   if (bucketSizes.length != bucketThresholds.length) {
@@ -799,11 +798,10 @@ function compartmentedGenShares(secret, bucketSizes, bucketThresholds, group) {
 
 /**
  * Combines shares to reveal a secret according to Compartmented
- * Secret Sharing as presented in INSERT LINK HERE.
+ * Secret Sharing as presented in https://eprint.iacr.org/2005/408.pdf
  * Does not check for the correctness of shares. If the shares
  * are input incorrectly, generates a wrong output.
- * @param {[[(int, BigIntegerAdapter)]]} shares An array, i^th element of whose
- * consists of the shares of comparmartment i.
+ * @param {[[(int, BigIntegerAdapter)]]} shares Shares of compartments
  * @param {PrimeGroup} group The group in which the operations are done 
  * @returns {BigIntegerAdapter} The reconstructed secret
  */
