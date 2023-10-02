@@ -1,16 +1,15 @@
 /* eslint-disable camelcase */
-// ! Keep the below false for release. They print out secret values.
-// * Note: DEBUG and VERBOSE options may slightly reduce performance.
+// ! Keep DEBUG and VERBOSE false for release. They print out secret values.
 const DEBUG = false;
 const VERBOSE = false;
-const FOLDER_PATH = 'TSPA-Crypto-Tests'
+const FOLDER_PATH = 'BrowserCryptoLib'
 // TODO: Standardize Debug and Verbose printing (Debug starting, ending. Verbose values.)
-// TODO: Remove redundant if(VERBOSE) checks, they are no longer counted in the performance.
-// TODO: Exceptions and handling before release
+// TODO: Remove redundant if(VERBOSE) checks.
 // --- TESTS ---
-// TODO: Write proper tests.
 // eslint-disable-next-line require-jsdoc
+
 async function main() {
+  // This function is run by Node.
   const times = await testAll(50);
   const filename = FOLDER_PATH + '/raw results.csv';
   const append = false;
@@ -21,9 +20,14 @@ async function main() {
 }
 
 async function testAll(it) {
-  const times = await testSignature(it);
-  await testEncryption(it, times);
-  testSchnorr(it, times);
+  /**
+   * All tests should be configured here. Below are some example calls.
+   * Test functions return a hashmap of test results, and if a map is
+   * passed as a last argument, they append to that map as well. 
+   */
+  const times = await testSignature(it); // Do not pass a map on the first test call
+  await testEncryption(it, times); // Pass the return value of the first call ...
+  testSchnorr(it, times); // ... on all of the next test calls.
   await testOPRF(it, times);
   await testTOPRF(11, 6, it, false, times);
   await testTOPRF(13, 7, it, true, times);
@@ -32,8 +36,15 @@ async function testAll(it) {
   testShamir(11, 6, it, false, true, times);
   testShamir(11, 6, it, true, false, times);
   testShamir(11, 6, it, true, true, times);
-  return times;
+  return times; // This holds the times of all the calls above.
 }
+
+/**
+ * All test functions aside from testBigInt, testGroup, and testPolynomials 
+ * below test a part of the library and record times in a hashmap, passed as
+ * a last optional parameter. If no hashmap is passed, they work on a new one.
+ * 'it' determines iteration count. The 3 exceptions are for debug purposes.
+ */
 
 async function testSignature(it=5, resultMap) {
   const times = new Map([
@@ -74,7 +85,6 @@ async function testSignature(it=5, resultMap) {
   return resultMap;
 }
 
-// TODO: Documentation here and above
 async function testEncryption(it=5, resultMap) {
   const times = new Map([
     ['Encrypt', []],
@@ -117,11 +127,6 @@ async function testEncryption(it=5, resultMap) {
   return resultMap;
 }
 
-/**
- * Tests Schnorr Identification Scheme correctness and performance.
- * @param {int} it Iteration count
- * @return {boolean} true if all tests pass, false otherwise
- */
 function testSchnorr(it=5, resultMap) {
   const times = new Map([
     ['Schnorr Challenge', []],
@@ -136,7 +141,7 @@ function testSchnorr(it=5, resultMap) {
     var t1 = performance.now();
     const challengeTime = (t1 - t0);
     t0 = performance.now();
-    var resp = schnorrResponse(secret, c, G);
+    const resp = schnorrResponse(secret, c, G);
     t1 = performance.now();
     const responseTime = (t1 - t0);
     t0 = performance.now();
@@ -159,56 +164,9 @@ function testSchnorr(it=5, resultMap) {
   return resultMap;
 }
 
-/**
- * Tests the BigInteger library performance.
- * @param {int} it Iteration count
- */
-function testBigInt(it=500) {
-  // Divide functions into different arrays depending on parameters 
-  const simpleFunctions = ['bitLen', 'probPrime', 'toString']; // no input functions
-  const numFunctions = ['add', 'subtract', 'mul', 'divide','eq', 'leq', 'geq', 'lesser', 'greater']; // Not pow, it goes out of range with random numbers
-  const modFunctions = ['mod', 'randomMod'] // Not invMod, coprime numbers needed
-  const nmFunctions = ['addMod', 'subtractMod', 'mulMod', 'powMod', 'eqMod']; // num and mod input functions
-  const lenFunctions =['randomLen', 'randomPrime'];
-
-  let num = BigIntegerAdapter.randomLen(256);
-  let mod = BigIntegerAdapter.randomLen(256);
-  let len = 256;
-  for (const fun of simpleFunctions) {
-    const time = timeFunction(fun, [], it);
-    print('Testing ' + fun + '...');
-    print('\t' + it + ' iterations of ' + fun + ' took ' + time + ' milliseconds.');
-    print('\t Average duration of a single run: ' + time/it + ' milliseconds.\n');
-  }
-  for (const fun of numFunctions) {
-    print('Testing ' + fun + '...');
-    const time = timeFunction(fun, [num], it);
-    print('\t' + it + ' iterations of ' + fun + ' took ' + time + ' milliseconds.');
-    print('\t Average duration of a single run: ' + time/it + ' milliseconds.\n');
-  }
-  for (const fun of modFunctions) {
-    print('Testing ' + fun + '...');
-    const time = timeFunction(fun, [mod], it);
-    print('\t' + it + ' iterations of ' + fun + ' took ' + time + ' milliseconds.');
-    print('\t Average duration of a single run: ' + time/it + ' milliseconds.\n');
-  }
-  for (const fun of nmFunctions) {
-    print('Testing ' + fun + '...');
-    const time = timeFunction(fun, [num, mod], it);
-    print('\t' + it + ' iterations of ' + fun + ' took ' + time + ' milliseconds.');
-    print('\t Average duration of a single run: ' + time/it + ' milliseconds.\n');
-  }
-  for (const fun of lenFunctions) {
-    print('Testing ' + fun + '...');
-    const time = timeFunction(fun, [len], it);
-    print('\t' + it + ' iterations of ' + fun + ' took ' + time + ' milliseconds.');
-    print('\t Average duration of a single run: ' + time/it + ' milliseconds.\n');
-  }
-}
 
 /**
- * Tests a given function's performance.
- * TODO: Open this function to other classes' functions.
+ * Tests a given function's performance. Tested only on BigInt calls.
  * @param {string} fun Function name
  * @param {array} params Function parameters
  * @param {it} Iteration count
@@ -234,7 +192,7 @@ function timeFunction(fun, params, it) {
 }
 
 /**
- * Tests t-OPRF. Randomly generates key.
+ * Tests t-OPRF. Randomly generates the key.
  * @param {int} n Share count
  * @param {int} t Threshold
  * @param {int} it Iteration count
@@ -301,6 +259,7 @@ async function testTOPRF(n, t, it, lambdas=false, resultMap) {
 }
 
 /**
+ * Tests OPRF. Randomly generates the key.
  * Chooses a random key uniform in group exponents and
  * completes an OPRF within itself. How oblivious...
  * @param {string} secret Client input
@@ -357,8 +316,8 @@ async function testOPRF(it=5, resultMap) {
 
 /**
  * Tests Compartmented Secret Sharing
- * @param {[int]} bucketSizes
- * @param {[int]} bucketThresholds 
+ * @param {[int]} bucketSizes Compartment sizes
+ * @param {[int]} bucketThresholds Compartment thresholds
  * @param {int} it Iteration count 
  */
 function testCompartmented(bucketSizes, bucketThresholds, it, resultMap) {
@@ -414,14 +373,13 @@ function testCompartmented(bucketSizes, bucketThresholds, it, resultMap) {
  * @param {int} n Share count
  * @param {int} t Threhsold
  * @param {int} it Iteration count
- * @param {boolean?} exponent Whether Shamir is done on exponents
+ * @param {boolean?} exponent Whether the work is done on exponents
  * @param {Map} resultMap Map object holding previous tests results
  * @return {boolean} Whether the tests are successful
  */
 function testShamir(n, t, it, exponent=false, lambdas=false, resultMap) {
-  // TODO: Test with lambdas pre-calculated
   const messageTrail = `(${n}, ${t}) on ` + (exponent ? 'exponent':'base')+
-  (lambdas ? '(lambdas pre-calculated)' : '');
+  (lambdas ? ' (lambdas pre-calculated)' : '');
   const times = new Map([
     ['Shamir SS Generate ' + messageTrail, []],
     ['Shamir SS Combine ' + messageTrail, []],
@@ -481,8 +439,55 @@ function testShamir(n, t, it, exponent=false, lambdas=false, resultMap) {
 }
 
 /**
+ * Tests the BigInteger library performance.
+ * Only necessary for debug purposes and only prints values.
+ */
+function testBigInt(it=500) {
+  // Divide functions into different arrays depending on parameters 
+  const simpleFunctions = ['bitLen', 'probPrime', 'toString']; // no input functions
+  const numFunctions = ['add', 'subtract', 'mul', 'divide','eq', 'leq', 'geq', 'lesser', 'greater']; // Not pow, it goes out of range with random numbers
+  const modFunctions = ['mod', 'randomMod'] // Not invMod, coprime numbers needed
+  const nmFunctions = ['addMod', 'subtractMod', 'mulMod', 'powMod', 'eqMod']; // num and mod input functions
+  const lenFunctions =['randomLen', 'randomPrime'];
+
+  let num = BigIntegerAdapter.randomLen(256);
+  let mod = BigIntegerAdapter.randomLen(256);
+  let len = 256;
+  for (const fun of simpleFunctions) {
+    const time = timeFunction(fun, [], it);
+    print('Testing ' + fun + '...');
+    print('\t' + it + ' iterations of ' + fun + ' took ' + time + ' milliseconds.');
+    print('\t Average duration of a single run: ' + time/it + ' milliseconds.\n');
+  }
+  for (const fun of numFunctions) {
+    print('Testing ' + fun + '...');
+    const time = timeFunction(fun, [num], it);
+    print('\t' + it + ' iterations of ' + fun + ' took ' + time + ' milliseconds.');
+    print('\t Average duration of a single run: ' + time/it + ' milliseconds.\n');
+  }
+  for (const fun of modFunctions) {
+    print('Testing ' + fun + '...');
+    const time = timeFunction(fun, [mod], it);
+    print('\t' + it + ' iterations of ' + fun + ' took ' + time + ' milliseconds.');
+    print('\t Average duration of a single run: ' + time/it + ' milliseconds.\n');
+  }
+  for (const fun of nmFunctions) {
+    print('Testing ' + fun + '...');
+    const time = timeFunction(fun, [num, mod], it);
+    print('\t' + it + ' iterations of ' + fun + ' took ' + time + ' milliseconds.');
+    print('\t Average duration of a single run: ' + time/it + ' milliseconds.\n');
+  }
+  for (const fun of lenFunctions) {
+    print('Testing ' + fun + '...');
+    const time = timeFunction(fun, [len], it);
+    print('\t' + it + ' iterations of ' + fun + ' took ' + time + ' milliseconds.');
+    print('\t Average duration of a single run: ' + time/it + ' milliseconds.\n');
+  }
+}
+
+/**
  * TODO: This isn't useful in its current state. Time each function individually.
- * Tests polynomial operations.
+ * Tests polynomial operations. Only useful for debugging purposes.
  * @param {int} it Iteration count
  * @return {boolean} Whether the tests are successful
  */
@@ -522,6 +527,13 @@ function testGroup() {
 
 // --- Tests end ---
 // --- Cryptographic Signature Functions ---
+/**
+ * Wrapper for the sign function of Subtle interface of WebCrypto API;
+ * returns a promise resolving to a RSASSA-PKCS1 v1.5 signature on the given message.
+ * @param {string} message User input, to be signed
+ * @param {CryptoKey} privateKey Previously generated CryptoKey
+ * @return {Promise<ArrayBuffer>} Signature
+ */
 async function sign(message, privateKey) {
   const Crypto = importCrypto();
   const encoded = new TextEncoder().encode(message);
@@ -532,7 +544,14 @@ async function sign(message, privateKey) {
   );
 }
 
-// TODO: Documentation here and above
+/**
+ * Wrapper for the verify function of Subtle interface of WebCrypto API;
+ * verifies an RSASSA-PKCS1 v1.5 signature on the given message.
+ * @param {string} message User input, to be signed
+ * @param {ArrayBuffer} signature Signature generated with 'sign()'
+ * @param {CryptoKey} publicKey Previously generated CryptoKey 
+ * @return {Promise<bool>} True if the signature is valid
+ */
 async function verify(message, signature, publicKey) {
   const Crypto = importCrypto();
   const encoded = new TextEncoder().encode(message);
@@ -544,12 +563,20 @@ async function verify(message, signature, publicKey) {
   );
 }
 
-async function generateSignatureKeys() {
+/**
+ * Wrapper for the generateKey function of Subtle interface of WebCrypto API;
+ * Generates an RSAASSA-PKCS1 v1.5 key pair of specified bit length.
+ * After the returned promise is resolved, the resolving object has the fields
+ * pair.privateKey and pair.publicKey.
+ * @param {int} bitLen Length of the generated keys. Defaults to 2048.
+ * @return {Promise<CryptoKeyPair>} (privKey, pubKey)
+ */
+async function generateSignatureKeys(bitLen=2048) {
   const Crypto = importCrypto();
-  const keyPair = Crypto.subtle.generateKey(
+  const keyPair = await Crypto.subtle.generateKey(
     {
       name: 'RSASSA-PKCS1-v1_5', // Can also use RSA-PSS which uses a random salt
-      modulusLength: 2048,
+      modulusLength: bitLen,
       publicExponent: new Uint8Array([1, 0, 1]),
       hash: 'SHA-256',
     },
@@ -560,22 +587,56 @@ async function generateSignatureKeys() {
 }
 // --- Signature end ---
 // --- Symmetric Encryption Functions ---
-// TODO: Test these functions
+//TODO: Support for enc/dec with key instead of password.
 /**
- * A wrapper function for Crypto package's decryption to
- * simplify its use.
- * @param {ArrayBuffer} ciphertext
+ * Wrapper for the decrypt function of the Subtle interface of WebCrypto API.
+ * Encrypts a plaintext using AES-CTR with 64-bit blocks.
+ * Note that this is not an authenticated encryption scheme.
+ * TODO: Let caller choose encryption and hash functions.
+ * @param {BigIntegerAdapter | string} message  Original plaintext
+ * @param {string} password User input to derive the encryption key
+ * @param {string} hashFunction Used for key derivation (PBKDF2), i.e., "SHA-256"
+ * @param {int} iterations Used for key derivation (PBKDF2)
+ * @param {int} saltLen Used for key derivation (PBKDF2)
+ * @return {Promise<[ArrayBuffer, Uint8Array, Uint8Array]>} [ciphertext, counter, salt]
+*/
+async function encrypt(message, password, hashFunction, iterations, saltLen) {
+  if (message instanceof BigIntegerAdapter)
+  message = message.toString(16);
+const enc = new TextEncoder();
+const Crypto = importCrypto();
+const plaintext = enc.encode(message);
+const salt = Crypto.getRandomValues(new Uint8Array(saltLen));
+const key  = await deriveEncryptionKey(enc.encode(password), hashFunction, iterations, salt);
+let counter = Crypto.getRandomValues(new Uint8Array(16));
+let ciphertext = await Crypto.subtle.encrypt(
+  {
+    name: 'AES-CTR',
+    counter,
+    length: 64
+  },
+  key,
+  plaintext);
+  return [ciphertext, counter, salt];
+}
+
+/**
+ * Wrapper for the decrypt function of the Subtle interface of WebCrypto API.
+ * Decrypts a ciphertext encrypted using AES-CTR with 64-bit blocks.
+ * Note that this is not an authenticated encryption scheme.
+ * @param {ArrayBuffer} ciphertext generated by 'encrypt()'
  * @param {string} password User input to derive the decryption key
- * @param {string} hashFunction Used for key derivation (PBKDF2)
+ * @param {string} hashFunction Used for key derivation (PBKDF2), i.e., "SHA-256"
  * @param {int} iterations Used for key derivation (PBKDF2)
  * @param {Uint8Array} salt Used for key derivation (PBKDF2)
- * @param {Uint8Array(16)} counter
- * @return {Promise<string>} plaintext
+ * @param {Uint8Array} counter generated by 'encrypt()'
+ * @return {Promise<string>} Decrypted plaintext
  */
 async function decrypt(ciphertext, password, hashFunction, iterations, salt, counter) {
+  const enc = new TextEncoder();
   const dec = new TextDecoder();
   const Crypto = importCrypto();
-  const key = await deriveEncryptionKey(password, hashFunction, iterations, salt);
+  const key = await deriveEncryptionKey(enc.encode(password), hashFunction, iterations, salt);
   const decrypted = await Crypto.subtle.decrypt(
     {
       name: 'AES-CTR',
@@ -584,41 +645,19 @@ async function decrypt(ciphertext, password, hashFunction, iterations, salt, cou
     },
     key,
     ciphertext);
-  return dec.decode(decrypted); //? This may be wrong
+  return dec.decode(decrypted);
 }
 
 /**
- * A wrapper function for Crypto package's encryption to
- * simplify its use. CTR and CBC modes are non-authenticated
- * encryption schemes, whereas GCM mode includes authentication.
- * TODO: Let caller choose encryption and hash functions.
- * @param {BigIntegerAdapter | string} message  Original plaintext
- * @param {string} password User input to derive the encryption key
- * @param {string} hashFunction Used for key derivation (PBKDF2)
- * @param {int} iterations Used for key derivation (PBKDF2)
- * @param {int} saltLen Used for key derivation (PBKDF2)
- * @return {Promise<[ArrayBuffer, Uint8Array(16), Uint8Array(saltLen)]>} [ciphertext, counter, salt]
+ * Wrapper for the deriveKey function of the Subtle interface of WebCrypto API.
+ * Derives a 256-bit encryption key to be used for AES-CTR with 64-bit blocks from
+ * the given password. Uses PBKDF2.
+ * @param {ArrayBuffer} encodedPw Password encoded with TextEncoder
+ * @param {string} hashFunction A Cryptographic hash function, i.e., SHA-256
+ * @param {int} iterations Iterations of PBKDF2
+ * @param {Uint8Array} salt Random salt for PBKDF2
+ * @returns {Promise<CryptoKey>} Symmetric encryption key
  */
-async function encrypt(message, password, hashFunction, iterations, saltLen) {
-  if (message instanceof BigIntegerAdapter)
-    message = message.toString(16);
-  const enc = new TextEncoder();
-  const Crypto = importCrypto();
-  const plaintext = enc.encode(message);
-  const salt = Crypto.getRandomValues(new Uint8Array(saltLen));
-  const key  = await deriveEncryptionKey(enc.encode(password), hashFunction, iterations, salt);
-  let counter = Crypto.getRandomValues(new Uint8Array(16));
-  let ciphertext = await Crypto.subtle.encrypt(
-  {
-      name: 'AES-CTR',
-      counter,
-      length: 64
-    },
-    key,
-    plaintext);
-  return [ciphertext, counter, salt];
-}
-
 async function deriveEncryptionKey(encodedPw, hashFunction, iterations, salt) {
   const Crypto = importCrypto();
   const keyMaterial = await Crypto.subtle.importKey(
@@ -641,16 +680,29 @@ async function deriveEncryptionKey(encodedPw, hashFunction, iterations, salt) {
   return key;
 }
 
+/**
+ * Wrapper for the exportKey function of the Subtle interface of WebCrypto API.
+ * Exports a key from a CryptoKey object into portable format.
+ * @param {CryptoKey} key to be exported
+ * @returns {Promise<ArrayBuffer>} Raw data of the key
+ */
 async function exportKey(key) {
+  //TODO: Add other formats here too.
   const Crypto = importCrypto();
-  return await Crypto.subtle.exportKey('raw', key); // TODO: Check if 'raw is okay.
+  return await Crypto.subtle.exportKey('raw', key);
 }
 
-async function importEncryptionKey(exportedKey) {
+/**
+ * Wrapper for the importKey function of the Subtle interface of WebCrypto APIç
+ * Imoprts a key from portable format into a CryptoKey object.
+ * @param {ArrayBuffer} keyData Raw data of the key
+ * @returns {Promise<CryptoKey>} CryptoKey object constructed from the data
+ */
+async function importKey(keyData) {
   const Crypto = importCrypto();
   return await Crypto.subtle.importKey(
    'raw',
-    exportedKey,
+    keyData,
     'AES-CTR',
     true,
     ['encrypt', 'decrypt']);
@@ -663,14 +715,14 @@ async function importEncryptionKey(exportedKey) {
 /**
  * Generates a random exponent from the common PrimeGroup to be used as challenge.
  * @param {PrimeGroup} group The group in which the operations are done 
- * @return {BigIntegerAdapter} c Random challenge
+ * @return {BigIntegerAdapter} 'c': Random challenge
  */
 function schnorrChallenge(group) {
   return group.randomExponent();
 }
 
 /**
- * ! Note: public key is calculated here.
+ * * Note: public key is calculated here.
  * Generates a responds to the challenge, proving knowledge of x.
  * Note that X = g^x is normally assumed to be known, because the
  * public key is (g^x, group). For the sake of simplicity, it is
@@ -679,7 +731,7 @@ function schnorrChallenge(group) {
  *  exponent in the group
  * @param {BigIntegerAdapter} c The challenge sent by the challenger
  * @param {PrimeGroup} group The group in which the operations are done 
- * @return {[BigIntegerAdapter, BigIntegerAdapter, BigIntegerAdapter]} [X Y z]
+ * @return {[BigIntegerAdapter, BigIntegerAdapter, BigIntegerAdapter]} [X, Y, z]
  *  X = g^x the public key, Y = g^random and z = y*x^c the response.
  */
 function schnorrResponse(x, c, group) {
@@ -700,7 +752,7 @@ function schnorrResponse(x, c, group) {
  * @param {BigIntegerAdapter} z Second part of the response
  * @param {BigIntegerAdapter} c The challenge
  * @param {PrimeGroup} group The group in which the operations are done 
- * @return {boolean} g^z == Y*X^c (in group)
+ * @return {bool} g^z == Y*X^c (in group)
  */
 function schnorrVerify(X, Y, z, c, group) {
   const mod = group.modulus;
@@ -766,6 +818,26 @@ function compartmentedCombineShares(shares, group) {
 }
 
 /**
+ * Generate shares from a secret according to Shamir's Secret Sharing
+ * @param {string | BigIntegerAdapter} secret Secret to divide into shares
+ * @param {int} n Share count
+ * @param {int} t Threhsold
+ * @param {PrimeGroup} group The group in which the operations are done 
+ * @return {[[int, BigIntegerAdapter]]} The shares that uniquely determine the
+ * secret. Each share is a tuple of (int, BigIntegerAdapter)
+*/
+function shamirGenShares(secret, n, t, group) {
+  if (typeof secret == 'string')
+  secret = new BigIntegerAdapter(secret);
+const pnomial = genPol(secret, t, group);
+const shares = [];
+for (let i = 1; i <= n; i++) {
+  shares.push([i, evalPol(pnomial, i, group)]);
+}
+return shares;
+}
+
+/**
  * Takes an array of indices and shares where the elements
  * are in the form [k, share #k]. Uses Lagrange interpolation
  * to combine the shares and returns the secret as a BigInteger.
@@ -801,26 +873,6 @@ function shamirCombineShares(shares, group, exponent=false) {
     else at_0 = at_0.addMod(at_i.mulMod(lambda_i, ord), ord);
   }
   return at_0;
-}
-
-/**
- * Generate shares from a secret according to Shamir's Secret Sharing
- * @param {string | BigIntegerAdapter} secret Secret to divide into shares
- * @param {int} n Share count
- * @param {int} t Threhsold
- * @param {PrimeGroup} group The group in which the operations are done 
- * @return {[[int, BigIntegerAdapter]]} The shares that uniquely determine the
- * secret. Each share is a tuple of (int, BigIntegerAdapter)
- */
-function shamirGenShares(secret, n, t, group) {
-  if (typeof secret == 'string')
-    secret = new BigIntegerAdapter(secret);
-  const pnomial = genPol(secret, t, group);
-  const shares = [];
-  for (let i = 1; i <= n; i++) {
-    shares.push([i, evalPol(pnomial, i, group)]);
-  }
-  return shares;
 }
 
 /**
@@ -942,11 +994,11 @@ async function oprfMask(secret, group) {
  * Hashes a string to an element in the given group.
  * Returns a promise resolving to the hash as a hex string.
  * This is not fixed sized output, though.
- * @param {string} str String to digest into hash
+ * @param {string} str To digest into hash
  * @param {PrimeGroup} group The group in which the operations are done 
  * @return {Promise<string>} Hp(str) in hexadecimal string form
  */
-async function hashPrime(str, group) { //* Full domain hash, problem: Z_n*
+async function hashPrime(str, group) {
   const g = group.generator;
   const mod = group.modulus;
   let baseHash = await hash(str); // Hex string
@@ -960,7 +1012,7 @@ async function hashPrime(str, group) { //* Full domain hash, problem: Z_n*
 /**
  * Hashes a string using SHA-256, returns a promise resolving
  * to the hash as a string.
- * @param {string} str String to digest into hash
+ * @param {string} str To digest into hash
  * @return {Promise<string>} SHA256(str) in hexadecimal string form
  */
 async function hash(str) {
@@ -1477,6 +1529,20 @@ function printError(T) {
   console.log('%c' + T, 'color: red');
 }
 // --- Helpful functions end ---
+
+// --- Exports ---
+
+module.exports = {
+  sign, verify, generateSignatureKeys, decrypt, encrypt,
+  deriveEncryptionKey, exportKey, importKey, schnorrChallenge, schnorrResponse,
+  schnorrVerify, compartmentedGenShares, compartmentedCombineShares, shamirGenShares, shamirCombineShares,
+  calculateLambda, genPol, evalPol, oprfResponse, oprfChallenge,
+  oprfMask, hashPrime, hash, PrimeGroup, BigIntegerAdapter,
+  importCrypto, toArrayBuffer, print, printDebug, printVerbose,
+  printError
+}
+
+// --- Exports end ---
 
 // This check protects importing scripts from running main().
 if (typeof require != 'undefined' && require.main == module) {
