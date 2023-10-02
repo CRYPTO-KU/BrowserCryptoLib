@@ -209,7 +209,7 @@ async function testTOPRF(n, t, it, lambdas=false, resultMap) {
   const G = new PrimeGroup();
   const secret = 'This is some very secret message '+
       'sent over a secure channel.';
-  let Hp_x = await hashPrime(secret, G);
+  let Hp_x = await groupHash(secret, G);
   Hp_x = new BigIntegerAdapter(Hp_x, 16);
   for (let i = 1; i <= it; i++) {
     const key = G.randomExponent();
@@ -222,7 +222,7 @@ async function testTOPRF(n, t, it, lambdas=false, resultMap) {
       }
     }
     var t0 = performance.now();
-    const [ro, alpha] = await oprfMask(secret, G);
+    const [rho, alpha] = await oprfMask(secret, G);
     var t1 = performance.now();
     const maskTime = (t1 - t0);
     const betas = [];
@@ -236,7 +236,7 @@ async function testTOPRF(n, t, it, lambdas=false, resultMap) {
       betas.push(beta_i)
     }
     t0 = performance.now();
-    const resp = await oprfResponse(betas, ro, G);
+    const resp = await oprfResponse(betas, rho, G);
     t1 = performance.now();
     const responseTime = (t1 - t0);
     const check = result.eqMod(resp, G.modulus);
@@ -273,14 +273,14 @@ async function testOPRF(it=5, resultMap) {
   ]);
   const G = new PrimeGroup();
   const secret = 'This is some very secret message '+
-      'sent over a secure channel.';
-  let Hp_x = await hashPrime(secret, G);
+      'to send over a secure channel.';
+  let Hp_x = await groupHash(secret, G);
   Hp_x = new BigIntegerAdapter(Hp_x, 16);
   for (let i = 1; i <= it; i++) {
     const key = G.randomExponent();
     const result = Hp_x.powMod(key, G.modulus);
     var t0 = performance.now();
-    const [ro, alpha] = await oprfMask(secret, G);
+    const [rho, alpha] = await oprfMask(secret, G);
     var t1 = performance.now();
     const maskTime = (t1 - t0);
     t0 = performance.now();
@@ -288,7 +288,7 @@ async function testOPRF(it=5, resultMap) {
     t1 = performance.now();
     const challengeTime = (t1 - t0);
     t0 = performance.now();
-    const resp = await oprfResponse(beta, ro, G);
+    const resp = await oprfResponse(beta, rho, G);
     t1 = performance.now();
     const responseTime = (t1 - t0);
     const check = result.eqMod(resp, G.modulus);
@@ -299,7 +299,7 @@ async function testOPRF(it=5, resultMap) {
     printError('OPRF test #' + i + ' failed.')
     printVerbose(`key: ${key.toString(16)} \n`);
     printVerbose(`result: ${result.toString(16)} \n`);
-    printVerbose(`ro: ${ro.toString(16)} \n`);
+    printVerbose(`rho: ${rho.toString(16)} \n`);
     printVerbose(`alpha: ${alpha.toString(16)} \n`);
     printVerbose(`beta: ${beta.toString(16)} \n`);
     printVerbose(`resp: ${resp.toString(16)} \n`);
@@ -768,11 +768,12 @@ function schnorrVerify(X, Y, z, c, group) {
  * Secret Sharing as presented in https://eprint.iacr.org/2005/408.pdf
  * Each compartment (bucket) has a threshold of its own,
  * allowing for an access control mechanism.
- * @param {BigIntegerAdapter} secret Secret to divide into shares
+ * @param {string | BigIntegerAdapter} secret Secret to divide into shares,
+ * a number or a string representing a number
  * @param {[int]} bucketSizes Sizes of compartments
  * @param {[int]} bucketThresholds Thresholds of compartments
  * @param {PrimeGroup} group The group in which the operations are done
- * @return {[[(int, BigIntegerAdapter)]]} Shares of compartments. Share
+ * @return {[[[int, BigIntegerAdapter]]]} Shares of compartments. Share
  * j of compartment i corresponds to shares[i][j].
  */
 function compartmentedGenShares(secret, bucketSizes, bucketThresholds, group) {
@@ -780,6 +781,8 @@ function compartmentedGenShares(secret, bucketSizes, bucketThresholds, group) {
     printError('bucketSizes and bucketThresholds sizes do not match.');
     return [];
   }
+  if (typeof secret == 'string')
+    secret = new BigIntegerAdapter(secret);
   const bucketCount = bucketSizes.length;
   const bucketSecrets = [];
   var total = new BigIntegerAdapter(0);
@@ -801,7 +804,7 @@ function compartmentedGenShares(secret, bucketSizes, bucketThresholds, group) {
  * Secret Sharing as presented in https://eprint.iacr.org/2005/408.pdf
  * Does not check for the correctness of shares. If the shares
  * are input incorrectly, generates a wrong output.
- * @param {[[(int, BigIntegerAdapter)]]} shares Shares of compartments
+ * @param {[[[int, BigIntegerAdapter]]]} shares Shares of compartments
  * @param {PrimeGroup} group The group in which the operations are done 
  * @returns {BigIntegerAdapter} The reconstructed secret
  */
@@ -817,22 +820,23 @@ function compartmentedCombineShares(shares, group) {
 
 /**
  * Generate shares from a secret according to Shamir's Secret Sharing
- * @param {string | BigIntegerAdapter} secret Secret to divide into shares
+ * @param {string | BigIntegerAdapter} secret Secret to divide into shares,
+ * a number or a string representing a number
  * @param {int} n Share count
  * @param {int} t Threhsold
  * @param {PrimeGroup} group The group in which the operations are done 
  * @return {[[int, BigIntegerAdapter]]} The shares that uniquely determine the
- * secret. Each share is a tuple of (int, BigIntegerAdapter)
+ * secret. Each share is an array of size two of the form [int, BigIntegerAdapter]
 */
 function shamirGenShares(secret, n, t, group) {
   if (typeof secret == 'string')
-  secret = new BigIntegerAdapter(secret);
-const pnomial = genPol(secret, t, group);
-const shares = [];
-for (let i = 1; i <= n; i++) {
-  shares.push([i, evalPol(pnomial, i, group)]);
-}
-return shares;
+    secret = new BigIntegerAdapter(secret);
+  const pnomial = genPol(secret, t, group);
+  const shares = [];
+  for (let i = 1; i <= n; i++) {
+    shares.push([i, evalPol(pnomial, i, group)]);
+  }
+  return shares;
 }
 
 /**
@@ -845,16 +849,17 @@ return shares;
  * Pass lambdas as the third elements of shares if they are
  * precomputed, i.e., shares[i] = [x_i, y_i, lambda_i]. Otherwise
  * pass each share as tuples, i.e., shares[i] = [x_i, y_i].
+ * 
  * IMPORTANT: During the pre-calculation of lambdas make sure
- * to use share count for interpolation, do not default to n.
+ * to use available share count for interpolation, not total
+ * share count.
  *
- * @param {[[int, BigIntegerAdapter]]} shares A vector of shares 
- * where each share is of the form [int, BigIntegerAdapter, BigIntegerAdapter?],
+ * @param {[[int, BigIntegerAdapter, BigIntegerAdapter?]]} shares A vector of shares 
  * corresponding to [shareIndex, shareValue, shareLambda]. shareLambda
  * is only input when lambdas are pre-calculated.
  * @param {PrimeGroup} group The group in which the operations are done 
- * @param {boolean} exponent A boolean determining whether the
- * interpolation will be done on the exponents
+ * @param {boolean} exponent Determines whether the interpolation will
+ * be done on the exponents. Internal t-OPRF specific use case.
  * @return {BigIntegerAdapter} The reconstructed secret
  */
 function shamirCombineShares(shares, group, exponent=false) {
@@ -876,9 +881,9 @@ function shamirCombineShares(shares, group, exponent=false) {
 /**
  * Calculates the Lagrange interpolation coefficient for x = i and x_0 = 0.
  * @param {int} i Point x
- * @param {int} shareCount Share number
- * @param {BigIntegerAdapter} order Modulus of operations
- * @return {int} Lagrange Interpolation Coefficient Lambda_i
+ * @param {int} shareCount Number of available shares
+ * @param {BigIntegerAdapter} order Modulus of operations (group.order)
+ * @return {int} Lambda_i: The Lagrange interpolation coefficient
  */
 function calculateLambda(i, shareCount, order) {
   lambda_i = new BigIntegerAdapter(1);
@@ -894,15 +899,15 @@ function calculateLambda(i, shareCount, order) {
 /**
  * Constructs a degree t-1 semi-random polynomial.
  * All coefficients are exponents in the given group.
- * @param {BigIntegerAdapter} secret Secret to divide into shares
- * @param {int} t Threhsold
+ * @param {BigIntegerAdapter} constant Constant term
+ * @param {int} t Length of polynomial
  * @param {PrimeGroup} group The group in which the operations are done 
  * @return {[BigIntegerAdapter]} An array of polynomial coefficients,
- * representing a polynomial of degree t-1 with a_0 = secret,
+ * representing a polynomial of degree t-1 with a_0 = contant,
  * a_i = random for all 0<i<t.
  */
-function genPol(secret, t, group) {
-  const pnomial = [secret];
+function genPol(constant, t, group) {
+  const pnomial = [constant];
   for (let i = 1; i < t; i++) {
     const rand = group.randomExponent();
     pnomial.push(rand);
@@ -913,7 +918,7 @@ function genPol(secret, t, group) {
 /**
  * Evaluates a polynomial at a point in a group.
  * @param {[BigIntegerAdapter]} pol An array representing a polynomial
- * @param {int} x A point on which to evaluate the polynomial
+ * @param {int} x The point on which to evaluate the polynomial
  * @param {PrimeGroup} group The group in which the operations are done 
  * @return {BigIntegerAdapter} The polynomial evaluated at x
  */
@@ -929,25 +934,58 @@ function evalPol(pol, x, group) {
 }
 // --- Secret Sharing end ---
 // --- OPRF functions ---
+
 /**
- * Calculates beta^(ro^-1) = alpha^(k*(ro^-1)) = Hp_x^(ro*k*(ro^-1)) = Hp_x^k
+ * Creates the masked text to be sent to each SP.
+ * Call this function once, and send alpha to each SP.
+ * This returns a promise resolving to [rho, alpha], the SPs will
+ * respond with beta_i = alpha^k_i and c_i.
+ * This function also returns rho, which should be kept secret and only
+ * be used as an input to the reconstructPassword function.
+ * @param {string} secret Client input to OPRF
+ * @param {PrimeGroup} group The group in which the operations are done 
+ * @return {Promise<[BigIntegerAdapter, BigIntegerAdapter]>} [rho, alpha]:
+ * A pair holding the random number rho and alpha= Hp_x^rho
+*/
+async function oprfMask(secret, group) {
+  const rho = group.randomElement();
+  const Hp_x = await groupHash(secret, group);
+  printVerbose('Hp_x: ' + Hp_x);
+  let Hp_xToRho = new BigIntegerAdapter(Hp_x, 16);
+  Hp_xToRho = Hp_xToRho.powMod(rho, group.modulus);
+  return [rho, Hp_xToRho];
+}
+
+/**
+ * Generates the challenge alpha^k.
+ * @param {BigIntegerAdapter} alpha Hp_x^rho received from client
+ * @param {BigIntegerAdapter} k The OPRF key, secret value
+ * @param {PrimeGroup} group The group in which the operations are done 
+ * @return {Promise<BigIntegerAdapter>} beta = alpha^k
+*/
+async function oprfChallenge(alpha, k, group) {
+  return alpha.powMod(k, group.modulus);
+}
+
+/**
+ * Calculates beta^(rho^-1) = alpha^(k*(rho^-1)) = Hp_x^(rho*k*(rho^-1)) = Hp_x^k.
  * If using t-OPRF, pass betas as an array. Otherwise pass a BigIntegerAdapter.
  * @param {[BigIntegerAdapter] | BigIntegerAdapter} betas Either beta (on OPRF)
  * or an array of betas (on t-OPRF).
- * @param {BigIntegerAdapter} ro The random number previously calculated
+ * @param {BigIntegerAdapter} rho The random number previously calculated
  * using oprfMask()
  * @param {PrimeGroup} group The group in which the operations are done 
  * @return {Promise<BigIntegerAdapter>} The output of OPRF: Hp_x^k
  */
-async function oprfResponse(betas, ro, group) {
+async function oprfResponse(betas, rho, group) {
   const threshold = !(betas instanceof BigIntegerAdapter);
   // betas is actually a single beta in the below case
-  if (!threshold) return betas.powMod(ro.invMod(group.order), group.modulus);
+  if (!threshold) return betas.powMod(rho.invMod(group.order), group.modulus);
   const lambdas = betas[0].length == 3;
   const shares = [];
   for (const beta of betas) {
     const index = beta[0];
-    const toRoInv = await oprfResponse(beta[1], ro, group);
+    const toRoInv = await oprfResponse(beta[1], rho, group);
     const share = [index, toRoInv];
     if (lambdas) share.push(beta[2]);
     shares.push(share);
@@ -955,37 +993,6 @@ async function oprfResponse(betas, ro, group) {
   return shamirCombineShares(shares, group, true);
 }
 
-/**
- * Generates the challenge alpha^k.
- * @param {BigIntegerAdapter} alpha Hp_x^ro received from client
- * @param {BigIntegerAdapter} k The OPRF key, secret value
- * @param {PrimeGroup} group The group in which the operations are done 
- * @return {Promise<BigIntegerAdapter>} beta = alpha^k
- */
-async function oprfChallenge(alpha, k, group) {
-  return alpha.powMod(k, group.modulus);
-}
-
-/**
- * Creates the masked text to be sent to each SP.
- * Call this function once, and send alpha to each SP.
- * This returns a promise resolving to [ro, alpha], the SPs will responds with
- * beta_i = alpha^k_i and will also send c_i
- * This function also returns ro, which should be kept secret and only
- * be used as an input to the reconstructPassword function.
- * @param {string} secret Client input to OPRF
- * @param {PrimeGroup} group The group in which the operations are done 
- * @return {Promise<[BigIntegerAdapter, BigIntegerAdapter]>} [ro, alpha]
- * A pair holding the random number ro and alpha= Hp_x^ro
- */
-async function oprfMask(secret, group) {
-  const ro = group.randomElement();
-  const Hp_x = await hashPrime(secret, group);
-  printVerbose('Hp_x: ' + Hp_x);
-  let Hp_xToRo = new BigIntegerAdapter(Hp_x, 16);
-  Hp_xToRo = Hp_xToRo.powMod(ro, group.modulus);
-  return [ro, Hp_xToRo];
-}
 // --- OPRF end ---
 // --- Hash functions ---
 /**
@@ -996,7 +1003,7 @@ async function oprfMask(secret, group) {
  * @param {PrimeGroup} group The group in which the operations are done 
  * @return {Promise<string>} Hp(str) in hexadecimal string form
  */
-async function hashPrime(str, group) {
+async function groupHash(str, group) {
   const g = group.generator;
   const mod = group.modulus;
   let baseHash = await hash(str); // Hex string
@@ -1011,7 +1018,7 @@ async function hashPrime(str, group) {
  * Hashes a string using SHA-256, returns a promise resolving
  * to the hash as a string.
  * @param {string} str To digest into hash
- * @return {Promise<string>} SHA256(str) in hexadecimal string form
+ * @return {Promise<string>} SHA-256(str) in hexadecimal string form
  */
 async function hash(str) {
   const enc = new TextEncoder();
@@ -1535,7 +1542,7 @@ module.exports = {
   deriveEncryptionKey, exportKey, importKey, schnorrChallenge, schnorrResponse,
   schnorrVerify, compartmentedGenShares, compartmentedCombineShares, shamirGenShares, shamirCombineShares,
   calculateLambda, genPol, evalPol, oprfResponse, oprfChallenge,
-  oprfMask, hashPrime, hash, PrimeGroup, BigIntegerAdapter,
+  oprfMask, groupHash, hash, PrimeGroup, BigIntegerAdapter,
   importCrypto, toArrayBuffer, print, printDebug, printVerbose,
   printError
 }
