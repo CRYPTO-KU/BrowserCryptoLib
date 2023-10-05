@@ -5,7 +5,7 @@
 
 - Note: The above links are not yet initialized.
 
-browser-crypto-lib is a lightweight and modular JavaScript library providing cryptographic utilities in the browser and Node.js environments. It focuses on ease of use and performance testing. It serves as a wrapper for other libraries when applicable, and implements some other functionality.
+browser-crypto-lib is a portable and modular JavaScript library providing cryptographic utilities in the browser and Node.js environments. It focuses on ease of use and performance testing. It serves as a wrapper for other libraries when applicable, and implements some other functionality.
 
 browser-crypto-lib should only be used for proof of concept and research applications. The code must be reviewed by security experts for security reliant applications.
 
