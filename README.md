@@ -9,7 +9,7 @@ browser-crypto-lib is a portable and modular JavaScript library providing crypto
 
 browser-crypto-lib should only be used for proof of concept and research applications. The code must be reviewed by security experts for security reliant applications.
 
-browser-crypto-lib makes heavy use of async/await calls; so, a tool such as [Browserify](https://browserify.org) should be used for browser compatibility. This is a straightforward extra step that makes the process of coding for browsers easier.
+browser-crypto-lib makes use of third party node.js modules; so, a tool such as [Browserify](https://browserify.org) should be used for browser compatibility. This is a straightforward extra step that makes the process of coding for browsers easier.
 
 The library is not yet complete as some functionalities are still being implemented and the code is being refactored.
 
