@@ -1347,7 +1347,7 @@ class BigIntegerAdapter {
    */
   static randomLen(len, force=false) {
     // * No modulo operations, no biasing.
-    const Crypto = importCrypto()
+    const Crypto = importCrypto();
     // Create a random ArrayBuffer
     const upLen = Math.ceil(len/8);
     let rnd = Crypto.getRandomValues(new Uint8Array(upLen)); // Uint8Array
