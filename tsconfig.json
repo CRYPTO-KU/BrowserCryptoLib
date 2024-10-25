@@ -1,9 +1,9 @@
 {
 	"compilerOptions": {
-		"target": "ES2022",                 // Specify ECMAScript target version
-		"module": "ES2022",                	// Use CommonJS for module system
+		"target": "es2022",                 // Specify ECMAScript target version
+		"module": "es2022",                	// Use CommonJS for module system
 		"moduleResolution": "node",			// Ensure TS understands Node.js modules
-		"lib": ["ES2022", "DOM"],			// Ensure ES2022 and DOM libs are included for typedefs
+		"lib": ["es2022", "DOM"],			// Ensure ES2022 and DOM libs are included for typedefs
 		"strict": true,                     // Enable strict type-checking options
 		"declaration": true,                // Generate .d.ts files for type declarations
 		"outDir": "./dist",                 // Output directory for compiled files
@@ -11,7 +11,7 @@
 		"esModuleInterop": true,            // Allow ES6 modules to be imported
 		"resolveJsonModule": true,			// Allow JSON imports
 		"skipLibCheck": true,               // Skip type checking of declaration files
-		"types": ["node"]					// Ensure Node.js definitions are available
+		"types": ["node", "jest"]			// Ensure Node.js definitions are available
 	},
 	"include": ["src/**/*", "tests/**/*"],
 	"exclude": ["node_modules", "dist"] 
