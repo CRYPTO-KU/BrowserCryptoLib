@@ -138,3 +138,9 @@ test.html
 
 # PDFs
 *.pdf
+
+# Module packages
+node_modules/
+
+# logs
+*.log
