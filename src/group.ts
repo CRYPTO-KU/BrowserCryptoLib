@@ -70,7 +70,7 @@ class RandomPrimeGroup implements PrimeGroup {
 	}
 
 	public randomElement(): BigInteger {
-		return this.generator.modPow(randomMod(this.order), this.modulus);
+		return this.generator.modPow(this.randomExponent(), this.modulus);
 	}
 	public randomExponent(): BigInteger {
 		return randomMod(this.order);
