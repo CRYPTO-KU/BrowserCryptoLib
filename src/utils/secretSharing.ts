@@ -9,6 +9,19 @@ export class Share {
 		public value: BigInteger,
 		public lambda?: BigInteger,
 	) {}
+
+	calculateLambda(availableShareCount: number, modulus: BigInteger) {
+		let lambda = bigInt(1);
+		for (let j = 1; j < availableShareCount; j++) {
+			if (j == this.index) {
+				continue;
+			}
+			const inv = bigInt(j - this.index).modInv(modulus); // 1 / (j - i)
+			const factor = inv.times(j).mod(modulus); // j / (j - i)
+			lambda = lambda.times(factor);
+		}
+		this.lambda = lambda;
+	}
 }
 
 export class Shamir {
@@ -35,12 +48,16 @@ export class Shamir {
 		group: PrimeGroup,
 		exponent: boolean = false,
 	) {
+		let mod = group.getModulus();
+		let ord = group.getOrder();
 		let at_0 = exponent ? bigInt(1) : bigInt(0);
 		for (const share of shares) {
 			if (!share.lambda) {
-				share.lambda = share.calculateLambda
+				share.calculateLambda(shares.length, ord);
 			}
-			at_0 = exponent ? at_0.mulMod(share.value.modPow(share.lambda?))
+			at_0 = exponent
+				? at_0.times(share.value.modPow(share.lambda!, mod)).mod(mod)
+				: at_0.add(share.value.times(share.lambda!).mod(ord)).mod(ord);
 		}
 	}
 }
