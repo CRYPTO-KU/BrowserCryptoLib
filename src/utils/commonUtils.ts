@@ -14,14 +14,12 @@ for (let n = 0; n <= 0xff; n++) {
 /**
  * @brief Converts a Uint8Array to a hexadecimal string. Does not mutate the elements
  * of the input array.
+ * @link https://stackoverflow.com/questions/40031688/how-can-i-convert-an-arraybuffer-to-a-hexadecimal-string-hex
  * @param byteArray
  * @returns Hexadecimal representation of bytes in byteArray
  */
 export function BytesToHex(byteArray: Uint8Array) {
-	/**
-	 * Credit to: https://stackoverflow.com/questions/40031688/how-can-i-convert-an-arraybuffer-to-a-hexadecimal-string-hex
-	 */
-	const hexOctets = new Array(byteArray.length);
+	const hexOctets = new Array<string>(byteArray.length);
 	for (let i = 0; i < byteArray.length; i++) {
 		hexOctets[i] = byteToHex[byteArray[i]];
 	}
