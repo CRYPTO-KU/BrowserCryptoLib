@@ -2,7 +2,7 @@ import { PrimeGroup } from '../group';
 import { BigInteger } from './commonUtils';
 
 export class Schnorr {
-	static createChallenge(group: PrimeGroup) {
+	static genChallenge(group: PrimeGroup) {
 		return group.randomExponent();
 	}
 
