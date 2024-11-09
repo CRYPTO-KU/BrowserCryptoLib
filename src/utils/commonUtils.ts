@@ -18,7 +18,7 @@ for (let n = 0; n <= 0xff; n++) {
  * @param byteArray
  * @returns Hexadecimal representation of bytes in byteArray
  */
-export function BytesToHex(byteArray: Uint8Array) {
+export function bytesToHex(byteArray: Uint8Array) {
 	const hexOctets = new Array<string>(byteArray.length);
 	for (let i = 0; i < byteArray.length; i++) {
 		hexOctets[i] = byteToHex[byteArray[i]];
@@ -45,7 +45,7 @@ export function randomBigInteger(
 		rnd[0] = rnd[0] | parseInt('1' + '0'.repeat(necessaryBits - 1), 2);
 	}
 
-	return bigInt(BytesToHex(rnd));
+	return bigInt(bytesToHex(rnd));
 }
 
 export function randomPrime(
