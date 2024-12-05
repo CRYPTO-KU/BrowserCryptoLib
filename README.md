@@ -3,7 +3,9 @@
 [![NPM version](https://img.shields.io/npm/v/browser-crypto-lib.svg)](https://www.npmjs.com/package/browser-crypto-lib)
 [![Build Status](https://img.shields.io/travis/CRYPTO-KU/browser-crypto-lib.svg)](https://travis-ci.org/CRYPTO-KU/browser-crypto-lib)
 
-**IMPORTANT NOTE** This project is currently being rewritten in TypeScript. The README below is obsolete, and will soon be rewritten as well.
+## **IMPORTANT NOTE**
+
+This project is currently being rewritten in TypeScript. The README below is obsolete, and will soon be rewritten as well.
 
 - Note: The above links are not yet initialized.
 
